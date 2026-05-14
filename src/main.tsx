@@ -1,17 +1,14 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import App from './App.tsx'
+import App from './App'
 import './index.css'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    {/* 
-      Używamy basename, aby router wiedział, że strona 
-      znajduje się w podfolderze /Texta/ 
-    */}
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+const rootElement = document.getElementById('root');
+
+if (rootElement) {
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
       <App />
-    </BrowserRouter>
-  </React.StrictMode>,
-)
+    </React.StrictMode>,
+  )
+}
