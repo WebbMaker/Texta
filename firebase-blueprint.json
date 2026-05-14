@@ -79,6 +79,14 @@
     "comments/{commentId}": {
       "schema": { "$ref": "comment" },
       "description": "Stores comments linked to posts"
+    },
+    "private_messages/{messageId}": {
+      "schema": "object",
+      "description": "Private messages between users"
+    },
+    "typing_status/{comboId}": {
+      "schema": "object",
+      "description": "Real-time typing indicators"
     }
   }
 }

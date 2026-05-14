@@ -5,6 +5,8 @@ import { Post } from '../types';
 import { PostComposer } from '../components/PostComposer';
 import { PostCard } from '../components/PostCard';
 import { useAuth } from '../contexts/AuthContext';
+import { AuthModal } from '../components/AuthModal';
+import { Terminal, Globe, Zap } from 'lucide-react';
 
 const POSTS_PER_PAGE = 15;
 
@@ -15,7 +17,8 @@ export function Home() {
   const [sortParam, setSortParam] = useState<'createdAt' | 'upvoteCount'>('createdAt');
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(true);
-  const { profile } = useAuth();
+  const [authModal, setAuthModal] = useState<{ open: boolean, mode: 'login' | 'register' }>({ open: false, mode: 'login' });
+  const { profile, user } = useAuth();
   
   const observer = useRef<IntersectionObserver | null>(null);
   const lastPostElementRef = useCallback((node: HTMLDivElement | null) => {
@@ -94,11 +97,60 @@ export function Home() {
 
   return (
     <div className="space-y-6">
+      {!user && (
+        <div className="mb-12 p-8 sm:p-12 bg-surface border border-gray-800 rounded-[2rem] relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-neon-blue/5 blur-[100px] -mr-32 -mt-32" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-neon-purple/5 blur-[100px] -ml-32 -mb-32" />
+          
+          <div className="relative z-10 flex flex-col items-center text-center">
+            <div className="flex items-center gap-4 mb-6">
+               <div className="p-3 bg-gray-900 rounded-xl border border-gray-800">
+                  <Terminal className="w-6 h-6 text-neon-blue" />
+               </div>
+               <div className="p-3 bg-gray-900 rounded-xl border border-gray-800">
+                  <Globe className="w-6 h-6 text-neon-purple" />
+               </div>
+               <div className="p-3 bg-gray-900 rounded-xl border border-gray-800">
+                  <Zap className="w-6 h-6 text-yellow-400" />
+               </div>
+            </div>
+            
+            <h1 className="text-4xl sm:text-6xl font-black tracking-tighter text-white mb-6 uppercase">
+              Witaj w <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-blue to-neon-purple">TEXTA</span>
+            </h1>
+            <p className="max-w-xl text-gray-400 text-lg mb-10 font-mono">
+              Miejsce, gdzie Twoje słowa mają znaczenie. <br className="hidden sm:block" /> Dołącz do społeczności przyszłości.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+              <button 
+                onClick={() => setAuthModal({ open: true, mode: 'register' })}
+                className="w-full sm:w-auto px-10 py-4 bg-neon-blue text-black font-black uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(0,242,255,0.3)]"
+              >
+                Zarejestruj się
+              </button>
+              <button 
+                onClick={() => setAuthModal({ open: true, mode: 'login' })}
+                className="w-full sm:w-auto px-10 py-4 border border-gray-700 text-white font-black uppercase tracking-widest rounded-xl hover:bg-gray-800 transition-all font-mono"
+              >
+                Zaloguj się
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {profile && (
         <div className="mb-8">
           <PostComposer />
         </div>
       )}
+
+      <AuthModal 
+        isOpen={authModal.open} 
+        onClose={() => setAuthModal(prev => ({ ...prev, open: false }))} 
+        mode={authModal.mode} 
+      />
       
       <div className="flex border-b border-gray-800 mb-6 font-mono text-sm">
         <button 

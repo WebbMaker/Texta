@@ -88,11 +88,24 @@ service cloud.firestore {
       allow create: if isSignedIn() && 
                     request.auth.uid in incoming().participants && 
                     incoming().senderId == request.auth.uid &&
-                    incoming().keys().hasAll(['participants', 'senderId', 'content', 'createdAt']) &&
+                    incoming().keys().hasAll(['participants', 'senderId', 'content', 'createdAt', 'seen']) &&
                     incoming().participants is list && incoming().participants.size() == 2 &&
                     incoming().content is string && incoming().content.size() >= 0 && incoming().content.size() <= 1000 &&
+                    incoming().seen == false &&
                     (!('imageUrl' in incoming()) || (incoming().imageUrl is string && incoming().imageUrl.size() <= 500000));
-      allow update, delete: if false;
+      allow update: if isSignedIn() && 
+                    request.auth.uid in resource.data.participants &&
+                    incoming().participants == existing().participants &&
+                    incoming().senderId == existing().senderId &&
+                    incoming().content == existing().content &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['seen']);
+      allow delete: if false;
+    }
+
+    match /typing_status/{comboId} {
+      allow read: if isSignedIn() && comboId.contains(request.auth.uid);
+      allow write: if isSignedIn() && comboId.contains(request.auth.uid);
     }
 
     match /usernames/{lowercaseUsername} {

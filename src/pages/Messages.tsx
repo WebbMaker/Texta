@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, writeBatch, getDocFromServer } from 'firebase/firestore';
 import { Link } from 'react-router';
 import { Send, Check, X, CheckCheck } from 'lucide-react';
 import { ImageUploadButton } from '../components/ImageUploadButton';
 import { UserAvatar } from '../components/UserAvatar';
 import { MarkdownContent } from '../components/MarkdownContent';
 import { Message, TypingStatus } from '../types';
+import { auth } from '../lib/firebase';
 
 interface Friend {
   uid: string;
@@ -22,6 +23,53 @@ interface FriendRequest {
   createdAt: number;
 }
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 export function Messages() {
   const { user, profile } = useAuth();
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -33,6 +81,7 @@ export function Messages() {
   const [otherIsTyping, setOtherIsTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const unreadListenersRef = useRef<{ [key: string]: () => void }>({});
 
   useEffect(() => {
     if (!user) return;
@@ -40,15 +89,19 @@ export function Messages() {
       const f: Friend[] = [];
       snap.forEach(d => f.push({ uid: d.id, ...d.data() } as Friend));
       
+      // Clean up old unread listeners
+      Object.values(unreadListenersRef.current).forEach(unsub => unsub());
+      unreadListenersRef.current = {};
+
       // Listen for unread messages for each friend
-      f.forEach((friend, index) => {
+      f.forEach((friend) => {
         const q = query(
           collection(db, 'private_messages'),
           where('participants', 'array-contains', user.uid),
           where('senderId', '==', friend.uid),
           where('seen', '==', false)
         );
-        onSnapshot(q, (unreadSnap) => {
+        unreadListenersRef.current[friend.uid] = onSnapshot(q, (unreadSnap) => {
           setFriends(prev => {
             const newFriends = [...prev];
             const found = newFriends.find(nf => nf.uid === friend.uid);
@@ -57,12 +110,20 @@ export function Messages() {
             }
             return newFriends;
           });
+        }, (err) => {
+          handleFirestoreError(err, OperationType.LIST, 'private_messages/unread');
         });
       });
 
       setFriends(f);
+    }, (err) => {
+       handleFirestoreError(err, OperationType.LIST, `users/${user.uid}/friends`);
     });
-    return () => unsub();
+
+    return () => {
+      unsub();
+      Object.values(unreadListenersRef.current).forEach(unsub => unsub());
+    };
   }, [user]);
 
   useEffect(() => {
@@ -71,6 +132,8 @@ export function Messages() {
       const reqs: FriendRequest[] = [];
       snap.forEach(d => reqs.push({ uid: d.id, ...d.data() } as FriendRequest));
       setRequests(reqs);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, `users/${user.uid}/friend_requests`);
     });
     return () => unsub();
   }, [user]);
@@ -92,23 +155,23 @@ export function Messages() {
       snap.docs.forEach(d => {
         batch.update(d.ref, { seen: true });
       });
-      batch.commit().catch(console.error);
+      batch.commit().catch(err => handleFirestoreError(err, OperationType.UPDATE, 'private_messages/seen'));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'private_messages/mark_seen_query');
     });
 
     // Listen for other person's typing status
     const typingDocId = [user.uid, selectedFriend.uid].sort().join('_');
     const unsubTyping = onSnapshot(doc(db, 'typing_status', typingDocId), (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data() as TypingStatus;
-        const isRecent = Date.now() - data.lastActive < 5000;
-        // Only show typing if it's the other person typing
-        // Note: For simplicity, I'll store who is typing in a map or just a field
-        // Let's refine the schema: typing_status/{combo} { [uid]: boolean }
-        const typingData = docSnap.data();
-        setOtherIsTyping(!!typingData[selectedFriend.uid] && isRecent);
+        const data = docSnap.data();
+        const isRecent = Date.now() - (data.lastActive || 0) < 5000;
+        setOtherIsTyping(!!data[selectedFriend.uid] && isRecent);
       } else {
         setOtherIsTyping(false);
       }
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, `typing_status/${typingDocId}`);
     });
 
     const unsubMessages = onSnapshot(query(collection(db, 'private_messages'), where('participants', 'array-contains', user.uid)), (snap) => {
@@ -122,6 +185,8 @@ export function Messages() {
       msgs.sort((a, b) => a.createdAt - b.createdAt);
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, 'private_messages');
     });
 
     return () => {

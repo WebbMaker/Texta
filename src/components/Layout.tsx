@@ -6,12 +6,14 @@ import { UserAvatar } from './UserAvatar';
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { AuthModal } from './AuthModal';
 
 export function Layout() {
-  const { user, profile, signInWithGoogle, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [authModal, setAuthModal] = useState<{ open: boolean, mode: 'login' | 'register' }>({ open: false, mode: 'login' });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,6 +21,8 @@ export function Layout() {
     const q = query(collection(db, 'users', user.uid, 'notifications'), where('read', '==', false));
     const unsubscribe = onSnapshot(q, (snap) => {
       setUnreadNotifs(snap.docs.length);
+    }, (err) => {
+      console.error('Layout notifications error:', err);
     });
     return () => unsubscribe();
   }, [user]);
@@ -34,6 +38,8 @@ export function Layout() {
       // Filter out messages where I am the sender
       const myUnreads = snap.docs.filter(d => d.data().senderId !== user.uid).length;
       setUnreadMessages(myUnreads);
+    }, (err) => {
+      console.error('Layout messages error:', err);
     });
     return () => unsubMessages();
   }, [user]);
@@ -97,8 +103,8 @@ export function Layout() {
                    )}
                 </Link>
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-gray-900 rounded-full border border-gray-800">
-                  <div className="w-2 h-2 rounded-full bg-neon-blue animate-pulse"></div>
-                  <span className="text-xs font-mono text-neon-blue">DOSTĘPNY</span>
+                   <div className="w-2 h-2 rounded-full bg-neon-blue animate-pulse"></div>
+                   <span className="text-xs font-mono text-neon-blue">DOSTĘPNY</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <Link to={`/u/${profile.username}`} className="flex items-center gap-2 group">
@@ -121,13 +127,13 @@ export function Layout() {
             ) : (
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={signInWithGoogle}
+                  onClick={() => setAuthModal({ open: true, mode: 'login' })}
                   className="text-sm border border-gray-700 text-white px-4 py-2 rounded-lg font-bold tracking-widest uppercase hover:bg-gray-800 transition-all whitespace-nowrap"
                 >
                   Zaloguj się
                 </button>
                 <button 
-                  onClick={signInWithGoogle}
+                  onClick={() => setAuthModal({ open: true, mode: 'register' })}
                   className="text-sm bg-neon-purple text-white px-4 py-2 sm:px-6 rounded-lg font-bold tracking-widest uppercase hover:brightness-110 transition-all shadow-[0_0_15px_rgba(188,19,254,0.3)] whitespace-nowrap"
                 >
                   Zarejestruj się
@@ -137,6 +143,12 @@ export function Layout() {
           </nav>
         </div>
       </header>
+
+      <AuthModal 
+        isOpen={authModal.open} 
+        onClose={() => setAuthModal(prev => ({ ...prev, open: false }))} 
+        mode={authModal.mode} 
+      />
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
         <Outlet />
