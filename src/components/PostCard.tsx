@@ -9,6 +9,7 @@ import { db } from '../lib/firebase';
 import { doc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { UserAvatar } from './UserAvatar';
 import { CommentSection } from './CommentSection';
+import { MarkdownContent } from './MarkdownContent';
 
 interface PostCardProps {
   key?: string | number;
@@ -68,17 +69,6 @@ export function PostCard({ post }: PostCardProps) {
     }
   };
 
-  const renderContent = (content: string) => {
-    // Regex for basic hashtags
-    const parts = content.split(/(#[a-zA-Z0-9_żółćęśąźńŻÓŁĆĘŚĄŹŃ]+)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('#')) {
-        return <span key={i} className="text-neon-blue cursor-pointer hover:underline">{part}</span>;
-      }
-      return <span key={i}>{part}</span>;
-    });
-  };
-
   return (
     <div className="p-6 bg-surface border border-gray-800 rounded-2xl relative overflow-hidden mb-6">
       <div className="absolute top-0 left-0 w-1 h-full bg-neon-blue"></div>
@@ -107,9 +97,7 @@ export function PostCard({ post }: PostCardProps) {
             )}
           </div>
 
-          <p className="text-lg leading-relaxed text-gray-200 mb-6 whitespace-pre-wrap break-words format-text">
-            {renderContent(post.content)}
-          </p>
+          <MarkdownContent content={post.content} className="mb-6" />
 
           {post.imageUrl && (
             <div className="mb-6 rounded-xl overflow-hidden border border-gray-800 flex justify-center bg-black/50 p-2">

@@ -2,6 +2,7 @@ import { Outlet, Link, useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { Terminal, User as UserIcon, LogOut, TerminalSquare, Send, Search, Bell } from 'lucide-react';
 import { UsernameModal } from './UsernameModal';
+import { UserAvatar } from './UserAvatar';
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -10,6 +11,7 @@ export function Layout() {
   const { user, profile, signInWithGoogle, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,6 +21,21 @@ export function Layout() {
       setUnreadNotifs(snap.docs.length);
     });
     return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const qMessages = query(
+      collection(db, 'private_messages'), 
+      where('participants', 'array-contains', user.uid),
+      where('seen', '==', false)
+    );
+    const unsubMessages = onSnapshot(qMessages, (snap) => {
+      // Filter out messages where I am the sender
+      const myUnreads = snap.docs.filter(d => d.data().senderId !== user.uid).length;
+      setUnreadMessages(myUnreads);
+    });
+    return () => unsubMessages();
   }, [user]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -73,14 +90,22 @@ export function Layout() {
                 </Link>
                 <Link to="/messages" className="text-gray-400 hover:text-neon-blue transition-colors relative" title="Wiadomości">
                    <Send className="w-6 h-6" />
+                   {unreadMessages > 0 && (
+                     <span className="absolute -top-1 -right-1 bg-neon-blue text-black text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                       {unreadMessages > 9 ? '9+' : unreadMessages}
+                     </span>
+                   )}
                 </Link>
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-gray-900 rounded-full border border-gray-800">
                   <div className="w-2 h-2 rounded-full bg-neon-blue animate-pulse"></div>
                   <span className="text-xs font-mono text-neon-blue">DOSTĘPNY</span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <Link to={`/u/${profile.username}`} className="text-sm font-semibold hover:text-neon-blue transition-colors hidden sm:block">
-                    @{profile.username}
+                  <Link to={`/u/${profile.username}`} className="flex items-center gap-2 group">
+                    <UserAvatar userId={profile.uid} username={profile.username} className="w-8 h-8 group-hover:ring-2 ring-neon-blue transition-all" />
+                    <span className="text-sm font-semibold group-hover:text-neon-blue transition-colors hidden sm:block">
+                      @{profile.username}
+                    </span>
                   </Link>
                   <button 
                     onClick={signOut}

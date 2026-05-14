@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, setDoc, deleteDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { Post, UserProfile } from '../types';
 import { UserAvatar } from '../components/UserAvatar';
 import { PostCard } from '../components/PostCard';
 import { EditProfileModal } from '../components/EditProfileModal';
+import { MarkdownContent } from '../components/MarkdownContent';
 import { TerminalSquare, Clock, Heart, UserPlus, Check, Clock3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+
+const POSTS_PER_PAGE = 10;
 
 export function Profile() {
   const { username } = useParams<{ username: string }>();
@@ -15,7 +18,10 @@ export function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   
   const [isFriend, setIsFriend] = useState(false);
   const [hasSentRequest, setHasSentRequest] = useState(false);
@@ -23,11 +29,57 @@ export function Profile() {
   const [totalLikes, setTotalLikes] = useState(0);
   const [showEditModal, setShowEditModal] = useState(false);
 
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastPostElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading || loadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        loadMorePosts();
+      }
+    });
+    
+    if (node) observer.current.observe(node);
+  }, [loading, loadingMore, hasMore]);
+
+  const loadMorePosts = async () => {
+    if (!lastDoc || loadingMore || !profile) return;
+    
+    setLoadingMore(true);
+    try {
+      const postsRef = collection(db, 'posts');
+      const q = query(
+        postsRef, 
+        where('authorId', '==', profile.uid),
+        orderBy('createdAt', 'desc'), 
+        startAfter(lastDoc), 
+        limit(POSTS_PER_PAGE)
+      );
+      
+      const snapshot = await getDocs(q);
+      const newPosts: Post[] = [];
+      snapshot.forEach((doc) => {
+        newPosts.push({ id: doc.id, ...doc.data() } as Post);
+      });
+      
+      setPosts(prev => [...prev, ...newPosts]);
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      
+      if (snapshot.docs.length < POSTS_PER_PAGE) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error("Error loading more posts:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   useEffect(() => {
     if (!username) return;
 
     let unsubscribeProfile: () => void;
-    let unsubscribePosts: () => void;
     let unsubscribeFriend: () => void;
     let unsubscribeSentReq: () => void;
     let unsubscribeRecvReq: () => void;
@@ -35,6 +87,7 @@ export function Profile() {
     async function loadProfileAndPosts() {
       setLoading(true);
       setError('');
+      setHasMore(true);
       try {
         const lowercaseUsername = username.toLowerCase();
         const usernamesRef = collection(db, 'usernames');
@@ -48,7 +101,6 @@ export function Profile() {
         }
 
         const userId = usernameSnap.docs[0].data().userId;
-
         const userRef = doc(db, 'users', userId);
         
         unsubscribeProfile = onSnapshot(userRef, (userSnap) => {
@@ -77,22 +129,26 @@ export function Profile() {
            });
         }
 
+        // Initial posts fetch
         const postsRef = collection(db, 'posts');
         const qPosts = query(
           postsRef, 
           where('authorId', '==', userId), 
           orderBy('createdAt', 'desc'), 
-          limit(50)
+          limit(POSTS_PER_PAGE)
         );
         
-        unsubscribePosts = onSnapshot(qPosts, (snapshot) => {
-          const newPosts: Post[] = [];
-          snapshot.forEach((doc) => {
-            newPosts.push({ id: doc.id, ...doc.data() } as Post);
-          });
-          setPosts(newPosts);
-          setLoading(false);
+        const snapshot = await getDocs(qPosts);
+        const newPosts: Post[] = [];
+        snapshot.forEach((doc) => {
+          newPosts.push({ id: doc.id, ...doc.data() } as Post);
         });
+        setPosts(newPosts);
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+        if (snapshot.docs.length < POSTS_PER_PAGE) {
+          setHasMore(false);
+        }
+        setLoading(false);
 
       } catch (err: any) {
         console.error("Error loading profile:", err);
@@ -105,7 +161,6 @@ export function Profile() {
 
     return () => {
       if (unsubscribeProfile) unsubscribeProfile();
-      if (unsubscribePosts) unsubscribePosts();
       if (unsubscribeFriend) unsubscribeFriend();
       if (unsubscribeSentReq) unsubscribeSentReq();
       if (unsubscribeRecvReq) unsubscribeRecvReq();
@@ -237,9 +292,9 @@ export function Profile() {
         </div>
 
         {profile.bio && (
-          <p className="text-gray-300 leading-relaxed border-l-2 pl-4 py-1 text-lg mb-4" style={{ borderColor: themeColor }}>
-            {profile.bio}
-          </p>
+          <div className="border-l-2 pl-4 py-1 mb-4" style={{ borderColor: themeColor }}>
+            <MarkdownContent content={profile.bio} className="text-lg" />
+          </div>
         )}
         
         <div className="text-xs text-text-dim font-mono mt-6">
@@ -257,9 +312,28 @@ export function Profile() {
             Nie przechwycono żadnych transmisji.
           </div>
         ) : (
-          posts.map((post) => (
-             <PostCard key={post.id} post={post} />
-          ))
+          <>
+            {posts.map((post, index) => (
+              <div 
+                key={post.id} 
+                ref={index === posts.length - 1 ? lastPostElementRef : null}
+              >
+                <PostCard post={post} />
+              </div>
+            ))}
+
+            {loadingMore && (
+              <div className="flex justify-center p-8 text-gray-500 font-mono text-xs tracking-widest animate-pulse">
+                POBIERANIE_DODATKOWYCH_DANYCH...
+              </div>
+            )}
+
+            {!hasMore && posts.length > 0 && (
+              <div className="text-center p-8 text-gray-600 font-mono text-xs uppercase tracking-tighter">
+                --- KONIEC DZIENNIKA ---
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

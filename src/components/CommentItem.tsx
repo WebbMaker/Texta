@@ -8,6 +8,7 @@ import { Link } from 'react-router';
 import { Heart, Trash2 } from 'lucide-react';
 
 import { UserAvatar } from './UserAvatar';
+import { MarkdownContent } from './MarkdownContent';
 
 interface CommentItemProps {
   key?: string | number;
@@ -67,16 +68,6 @@ export function CommentItem({ comment }: CommentItemProps) {
     }
   };
 
-  const renderContent = (content: string) => {
-    const parts = content.split(/(#[a-zA-Z0-9_żółćęśąźńŻÓŁĆĘŚĄŹŃ]+)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('#')) {
-        return <span key={i} className="text-neon-purple cursor-pointer hover:underline">{part}</span>;
-      }
-      return <span key={i}>{part}</span>;
-    });
-  };
-
   return (
     <div className="bg-bg-dark border border-gray-800 rounded-xl p-4 text-sm flex gap-4 relative group">
       <UserAvatar userId={comment.authorId} username={comment.authorUsername} className="w-8 h-8 flex-shrink-0" fallbackClassName="bg-indigo-500 font-bold font-mono text-white text-xs" />
@@ -94,7 +85,7 @@ export function CommentItem({ comment }: CommentItemProps) {
         {comment.imageUrl && (
           <img src={comment.imageUrl} alt="attached" className="max-h-40 rounded-lg object-contain border border-gray-700 mb-2 max-w-full" />
         )}
-        <p className="text-gray-300 whitespace-pre-wrap break-words leading-relaxed">{renderContent(comment.content)}</p>
+        <MarkdownContent content={comment.content} mentionColor="purple" />
       </div>
       <div className="flex flex-col items-center justify-start gap-1 pt-1">
         {user && user.uid === comment.authorId && (

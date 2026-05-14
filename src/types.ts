@@ -1,3 +1,17 @@
+export interface Message {
+  id: string;
+  participants: string[];
+  senderId: string;
+  content: string;
+  imageUrl?: string;
+  createdAt: number;
+  seen: boolean;
+}
+
+export interface TypingStatus {
+  isTyping: boolean;
+  lastActive: number;
+}
 export interface Notification {
   id: string;
   type: 'comment' | 'like' | 'friend_request' | 'system' | string;

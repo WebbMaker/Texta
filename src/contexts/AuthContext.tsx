@@ -26,6 +26,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (currentUser) {
         const profileRef = doc(db, 'users', currentUser.uid);
         
+        const setOffline = () => {
+          updateDoc(profileRef, { isOnline: false, lastActive: Date.now() }).catch(() => {});
+        };
+
+        window.addEventListener('beforeunload', setOffline);
+
         // Presence / Time spent tracker
         const heartbeat = setInterval(() => {
            updateDoc(profileRef, {
@@ -54,8 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         
         return () => {
+          window.removeEventListener('beforeunload', setOffline);
           clearInterval(heartbeat);
-          updateDoc(profileRef, { isOnline: false, lastActive: Date.now() }).catch(() => {});
+          setOffline();
           unsubscribeProfile();
         };
       } else {

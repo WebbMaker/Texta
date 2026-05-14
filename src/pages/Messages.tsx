@@ -1,29 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { Link } from 'react-router';
-import { Send, Check, X } from 'lucide-react';
+import { Send, Check, X, CheckCheck } from 'lucide-react';
 import { ImageUploadButton } from '../components/ImageUploadButton';
+import { UserAvatar } from '../components/UserAvatar';
+import { MarkdownContent } from '../components/MarkdownContent';
+import { Message, TypingStatus } from '../types';
 
 interface Friend {
   uid: string;
   username: string;
   addedAt: number;
+  unreadCount?: number;
 }
 
 interface FriendRequest {
   uid: string;
   username: string;
-  createdAt: number;
-}
-
-interface Message {
-  id: string;
-  participants: string[];
-  senderId: string;
-  content: string;
-  imageUrl?: string;
   createdAt: number;
 }
 
@@ -35,6 +30,8 @@ export function Messages() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [otherIsTyping, setOtherIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,6 +39,27 @@ export function Messages() {
     const unsub = onSnapshot(collection(db, 'users', user.uid, 'friends'), (snap) => {
       const f: Friend[] = [];
       snap.forEach(d => f.push({ uid: d.id, ...d.data() } as Friend));
+      
+      // Listen for unread messages for each friend
+      f.forEach((friend, index) => {
+        const q = query(
+          collection(db, 'private_messages'),
+          where('participants', 'array-contains', user.uid),
+          where('senderId', '==', friend.uid),
+          where('seen', '==', false)
+        );
+        onSnapshot(q, (unreadSnap) => {
+          setFriends(prev => {
+            const newFriends = [...prev];
+            const found = newFriends.find(nf => nf.uid === friend.uid);
+            if (found) {
+              found.unreadCount = unreadSnap.docs.length;
+            }
+            return newFriends;
+          });
+        });
+      });
+
       setFriends(f);
     });
     return () => unsub();
@@ -60,10 +78,40 @@ export function Messages() {
   useEffect(() => {
     if (!user || !selectedFriend) return;
     
-    // We fetch all messages where participants match the sorted combo
-    const participantsCombo = [user.uid, selectedFriend.uid].sort();
-    
-    const unsub = onSnapshot(query(collection(db, 'private_messages'), where('participants', 'array-contains', user.uid)), (snap) => {
+    // Mark messages as seen when chat opens
+    const qMarkSeen = query(
+      collection(db, 'private_messages'),
+      where('participants', 'array-contains', user.uid),
+      where('senderId', '==', selectedFriend.uid),
+      where('seen', '==', false)
+    );
+
+    const unsubSeen = onSnapshot(qMarkSeen, (snap) => {
+      if (snap.empty) return;
+      const batch = writeBatch(db);
+      snap.docs.forEach(d => {
+        batch.update(d.ref, { seen: true });
+      });
+      batch.commit().catch(console.error);
+    });
+
+    // Listen for other person's typing status
+    const typingDocId = [user.uid, selectedFriend.uid].sort().join('_');
+    const unsubTyping = onSnapshot(doc(db, 'typing_status', typingDocId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as TypingStatus;
+        const isRecent = Date.now() - data.lastActive < 5000;
+        // Only show typing if it's the other person typing
+        // Note: For simplicity, I'll store who is typing in a map or just a field
+        // Let's refine the schema: typing_status/{combo} { [uid]: boolean }
+        const typingData = docSnap.data();
+        setOtherIsTyping(!!typingData[selectedFriend.uid] && isRecent);
+      } else {
+        setOtherIsTyping(false);
+      }
+    });
+
+    const unsubMessages = onSnapshot(query(collection(db, 'private_messages'), where('participants', 'array-contains', user.uid)), (snap) => {
       const msgs: Message[] = [];
       snap.forEach(d => {
         const data = d.data() as Message;
@@ -75,7 +123,12 @@ export function Messages() {
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
-    return () => unsub();
+
+    return () => {
+      unsubSeen();
+      unsubTyping();
+      unsubMessages();
+    };
   }, [user, selectedFriend]);
 
   const handleSend = async (e: React.FormEvent) => {
@@ -88,7 +141,8 @@ export function Messages() {
         participants,
         senderId: user.uid,
         content: newMessage.trim(),
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        seen: false
       };
       if (imageUrl) {
          msg.imageUrl = imageUrl;
@@ -96,10 +150,34 @@ export function Messages() {
       await addDoc(collection(db, 'private_messages'), msg);
       setNewMessage('');
       setImageUrl(null);
+      
+      // Stop typing immediately
+      handleTyping(false);
     } catch(err) {
       console.error(err);
     }
   }
+
+  const handleTyping = (isTyping: boolean) => {
+    if (!user || !selectedFriend) return;
+    const typingDocId = [user.uid, selectedFriend.uid].sort().join('_');
+    const typingRef = doc(db, 'typing_status', typingDocId);
+    
+    setDoc(typingRef, {
+      [user.uid]: isTyping,
+      lastActive: Date.now()
+    }, { merge: true }).catch(console.error);
+  };
+
+  const onInputChange = (val: string) => {
+    setNewMessage(val);
+    handleTyping(true);
+    
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      handleTyping(false);
+    }, 3000);
+  };
 
   const handleAcceptRequest = async (req: FriendRequest) => {
     if (!user || !profile) return;
@@ -146,7 +224,10 @@ export function Messages() {
             <div className="space-y-2 max-h-40 overflow-y-auto">
               {requests.map(req => (
                 <div key={req.uid} className="flex flex-col gap-2 p-3 bg-bg-dark rounded-xl border border-gray-800">
-                  <span className="font-bold text-white text-sm">@{req.username}</span>
+                  <div className="flex items-center gap-2">
+                    <UserAvatar userId={req.uid} username={req.username} className="w-6 h-6" fallbackClassName="bg-gray-700 text-[10px]" />
+                    <span className="font-bold text-white text-sm">@{req.username}</span>
+                  </div>
                   <div className="flex gap-2">
                     <button onClick={() => handleAcceptRequest(req)} className="flex-1 bg-neon-purple text-white text-xs font-bold py-1.5 rounded uppercase hover:brightness-110 flex items-center justify-center gap-1">
                       <Check className="w-3 h-3" /> Akceptuj
@@ -172,10 +253,21 @@ export function Messages() {
               <button
                 key={f.uid}
                 onClick={() => setSelectedFriend(f)}
-                className={`w-full text-left px-4 py-3 rounded-xl mb-2 transition-colors flex flex-col ${selectedFriend?.uid === f.uid ? 'bg-gray-800 border border-neon-blue' : 'hover:bg-gray-900 border border-transparent'}`}
+                className={`w-full text-left px-4 py-3 rounded-xl mb-2 transition-colors flex items-center gap-3 ${selectedFriend?.uid === f.uid ? 'bg-gray-800 border border-neon-blue' : 'hover:bg-gray-900 border border-transparent'}`}
               >
-                <span className="font-bold text-white">{f.username}</span>
-                <span className="text-xs font-mono text-gray-500">Połączono</span>
+                <UserAvatar userId={f.uid} username={f.username} className="w-10 h-10 flex-shrink-0" />
+                <div className="flex-1 overflow-hidden">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-white truncate">{f.username}</span>
+                    {f.unreadCount && f.unreadCount > 0 ? (
+                      <span className="bg-neon-blue text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                        {f.unreadCount}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-mono text-gray-500">Połączono</span>
+                    )}
+                  </div>
+                </div>
               </button>
             ))
           )}
@@ -188,26 +280,52 @@ export function Messages() {
          {selectedFriend ? (
            <>
              <div className="p-4 border-b border-gray-800 flex items-center justify-between bg-bg-dark/50">
-               <span className="font-bold">Czatujesz z <Link to={`/u/${selectedFriend.username}`} className="text-neon-blue hover:underline">@{selectedFriend.username}</Link></span>
+               <div className="flex items-center gap-3">
+                 <UserAvatar userId={selectedFriend.uid} username={selectedFriend.username} className="w-8 h-8" />
+                 <span className="font-bold">Czatujesz z <Link to={`/u/${selectedFriend.username}`} className="text-neon-blue hover:underline">@{selectedFriend.username}</Link></span>
+               </div>
              </div>
              
              <div className="flex-1 overflow-y-auto p-4 space-y-4">
                {messages.length === 0 ? (
                  <p className="text-center text-gray-500 font-mono text-sm mt-10">Brak historii transmisji.</p>
                ) : (
-                 messages.map(msg => {
+                 messages.map((msg, index) => {
                    const isMe = msg.senderId === user.uid;
+                   const isLast = index === messages.length - 1;
                    return (
-                     <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                     <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                        <div className={`max-w-[70%] rounded-2xl px-4 py-2 ${isMe ? 'bg-neon-purple text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none'}`}>
                          {msg.imageUrl && (
                            <img src={msg.imageUrl} alt="attached" className="max-w-full rounded-lg mb-2 max-h-60 object-contain" />
                          )}
-                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                         <MarkdownContent content={msg.content} mentionColor={isMe ? 'purple' : 'blue'} />
                        </div>
+                       {isMe && isLast && (
+                         <div className="flex items-center gap-1 mt-1 px-1">
+                           {msg.seen ? (
+                             <>
+                               <span className="text-[10px] text-gray-500 font-mono uppercase">Wyświetlono</span>
+                               <CheckCheck className="w-3 h-3 text-neon-blue" />
+                             </>
+                           ) : (
+                             <>
+                               <span className="text-[10px] text-gray-500 font-mono uppercase">Dostarczono</span>
+                               <Check className="w-3 h-3 text-gray-600" />
+                             </>
+                           )}
+                         </div>
+                       )}
                      </div>
                    );
                  })
+               )}
+               {otherIsTyping && (
+                 <div className="flex justify-start">
+                   <div className="bg-gray-800/50 text-gray-400 text-xs py-2 px-4 rounded-xl font-mono animate-pulse">
+                     @{selectedFriend.username} pisze...
+                   </div>
+                 </div>
                )}
                <div ref={messagesEndRef} />
              </div>
@@ -232,7 +350,7 @@ export function Messages() {
                   <input
                     type="text"
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => onInputChange(e.target.value)}
                     placeholder="Zacznij transmisję..."
                     className="flex-1 bg-transparent border-2 border-gray-800 rounded-xl px-4 py-2 outline-none focus:border-neon-blue font-mono text-white"
                   />
