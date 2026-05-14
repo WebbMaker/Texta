@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile data",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Display handle" },
+        "lowercaseUsername": { "type": "string", "description": "Lowercase version of username for unique checks" },
+        "bio": { "type": "string", "description": "Short biography" },
+        "createdAt": { "type": "number", "description": "Timestamp of account creation" }
+      },
+      "required": ["username", "lowercaseUsername", "createdAt"]
+    },
+    "username_doc": {
+      "title": "Username document",
+      "description": "Helper to enforce unique usernames globally",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "post": {
+      "title": "Post",
+      "description": "A textual post",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "upvoteCount": { "type": "number" },
+        "downvoteCount": { "type": "number" },
+        "commentsCount": { "type": "number" }
+      },
+      "required": ["authorId", "authorUsername", "content", "createdAt", "upvoteCount", "downvoteCount", "commentsCount"]
+    },
+    "comment": {
+      "title": "Comment",
+      "description": "A comment on a post",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["postId", "authorId", "authorUsername", "content", "createdAt"]
+    },
+    "vote": {
+      "title": "Vote",
+      "description": "A vote record for a post",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["upvote", "downvote"] }
+      },
+      "required": ["type"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "user" },
+      "description": "Stores user profiles"
+    },
+    "usernames/{lowercaseUsername}": {
+      "schema": { "$ref": "username_doc" },
+      "description": "Ensures username uniqueness"
+    },
+    "posts/{postId}": {
+      "schema": { "$ref": "post" },
+      "description": "Stores user posts"
+    },
+    "posts/{postId}/votes/{userId}": {
+      "schema": { "$ref": "vote" },
+      "description": "Vote status by a specific user on a post to ensure one vote per user"
+    },
+    "comments/{commentId}": {
+      "schema": { "$ref": "comment" },
+      "description": "Stores comments linked to posts"
+    }
+  }
+}

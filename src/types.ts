@@ -1,0 +1,49 @@
+export interface Notification {
+  id: string;
+  type: 'comment' | 'like' | 'friend_request' | 'system' | string;
+  createdAt: number;
+  content: string;
+  read: boolean;
+  relatedId: string; // ID of post or user
+}
+
+export interface UserProfile {
+  uid: string;
+  username: string;
+  lowercaseUsername: string;
+  bio?: string;
+  createdAt: number;
+  avatarUrl?: string;
+  themeColor?: string;
+  totalTimeSpent?: number;
+  isOnline?: boolean;
+  lastActive?: number;
+}
+
+export interface Post {
+  id: string;
+  authorId: string;
+  authorUsername: string;
+  content: string;
+  imageUrl?: string;
+  createdAt: number;
+  upvoteCount: number;
+  downvoteCount: number;
+  commentsCount: number;
+}
+
+export interface Comment {
+  id: string;
+  postId: string;
+  authorId: string;
+  authorUsername: string;
+  content: string;
+  imageUrl?: string;
+  createdAt: number;
+  upvoteCount: number;
+}
+
+export interface Vote {
+  id: string; // voteUserId
+  type: 'upvote' | 'downvote';
+}

@@ -1,0 +1,73 @@
+import { useState, useEffect } from 'react';
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { Post } from '../types';
+import { PostComposer } from '../components/PostComposer';
+import { PostCard } from '../components/PostCard';
+import { useAuth } from '../contexts/AuthContext';
+
+export function Home() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sortParam, setSortParam] = useState<'createdAt' | 'upvoteCount'>('createdAt');
+  const { profile } = useAuth();
+
+  useEffect(() => {
+    setLoading(true);
+    const postsRef = collection(db, 'posts');
+    const q = query(postsRef, orderBy(sortParam, 'desc'), limit(50));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newPosts: Post[] = [];
+      snapshot.forEach((doc) => {
+        newPosts.push({ id: doc.id, ...doc.data() } as Post);
+      });
+      setPosts(newPosts);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching posts:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [sortParam]);
+
+  return (
+    <div className="space-y-6">
+      {profile && (
+        <div className="mb-8">
+          <PostComposer />
+        </div>
+      )}
+      
+      <div className="flex border-b border-gray-800 mb-6 font-mono text-sm">
+        <button 
+          onClick={() => setSortParam('createdAt')}
+          className={`pb-3 px-4 ${sortParam === 'createdAt' ? 'text-neon-blue border-b-2 border-neon-blue' : 'text-gray-500 hover:text-white'}`}
+        >
+          NAJNOWSZE
+        </button>
+        <button 
+          onClick={() => setSortParam('upvoteCount')}
+          className={`pb-3 px-4 ${sortParam === 'upvoteCount' ? 'text-neon-purple border-b-2 border-neon-purple' : 'text-gray-500 hover:text-white'}`}
+        >
+          POPULARNE
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {loading ? (
+          <div className="flex justify-center p-12 text-gray-500 font-mono tracking-widest text-sm animate-pulse">ŁADOWANIE_SYSTEMU...</div>
+        ) : posts.length === 0 ? (
+          <div className="text-center p-12 text-gray-500 border border-gray-800 border-dashed rounded-2xl font-mono text-sm max-w-lg mx-auto">
+            Nie znaleziono aktywnych węzłów. Bądź pierwszym, który prześle transmisję.
+          </div>
+        ) : (
+          posts.map((post) => (
+             <PostCard key={post.id} post={post} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

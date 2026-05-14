@@ -1,0 +1,6 @@
+{
+  "name": "Texta",
+  "description": "A real-time, text-based social media application featuring a terminal-like dark theme, upvoting, comments, and user profiles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
