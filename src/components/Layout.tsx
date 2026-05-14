@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { AuthModal } from './AuthModal';
+import { Sidebar } from './Sidebar';
 
 export function Layout() {
   const { user, profile, signOut } = useAuth();
@@ -137,13 +138,6 @@ export function Layout() {
           </div>
 
           <nav className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
-            <Link to="/videos" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-              <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span>
-              Filmy
-            </Link>
-            <Link to="/about" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors hidden sm:block">
-              O nas
-            </Link>
             {profile ? (
               <>
                 <Link to="/notifications" className="text-gray-400 hover:text-neon-purple transition-colors relative" title="Powiadomienia">
@@ -210,11 +204,15 @@ export function Layout() {
         mode={authModal.mode} 
       />
 
-      <main className="flex-1 w-full mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-auto">
-          <Outlet />
-        </div>
-      </main>
+      <div className="flex flex-1 relative">
+        <Sidebar />
+        
+        <main className="flex-1 w-full pl-20 lg:pl-64 transition-all duration-300">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-8 py-8">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

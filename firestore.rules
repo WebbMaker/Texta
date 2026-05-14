@@ -230,5 +230,63 @@ service cloud.firestore {
         allow create, update: if isSignedIn() && viewerId == request.auth.uid;
       }
     }
+
+    // --- Presence ---
+    function isValidPresence(data) {
+      return data.keys().hasAll(['isOnline', 'lastActive', 'updatedAt']) &&
+        data.isOnline is bool &&
+        data.lastActive is number &&
+        data.updatedAt is number &&
+        (!('uid' in data) || (data.uid == null || data.uid is string));
+    }
+
+    match /presence/{sessionId} {
+      allow read, list: if true;
+      allow create, update: if isValidId(sessionId) && isValidPresence(incoming());
+    }
+
+    // --- Global Chat ---
+    function isValidGlobalMessage(data) {
+      return data.keys().hasAll(['text', 'senderId', 'senderUsername', 'createdAt']) &&
+        data.text is string && data.text.size() <= 2000 &&
+        data.senderId == request.auth.uid &&
+        data.senderUsername is string &&
+        data.createdAt == request.time;
+    }
+
+    match /global_messages/{messageId} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && isValidGlobalMessage(incoming());
+    }
+
+    // --- Forum ---
+    function isValidTopic(data) {
+      return data.keys().hasAll(['title', 'description', 'creatorId', 'creatorUsername', 'createdAt', 'lastActivity']) &&
+        data.title is string && data.title.size() <= 100 &&
+        data.description is string && data.description.size() <= 300 &&
+        data.creatorId == request.auth.uid &&
+        data.creatorUsername is string &&
+        data.createdAt == request.time &&
+        data.lastActivity == request.time;
+    }
+
+    function isValidForumPost(data) {
+      return data.keys().hasAll(['text', 'senderId', 'senderUsername', 'createdAt']) &&
+        data.text is string && data.text.size() <= 5000 &&
+        data.senderId == request.auth.uid &&
+        data.senderUsername is string &&
+        data.createdAt == request.time;
+    }
+
+    match /forum_topics/{topicId} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && isValidTopic(incoming());
+      allow update: if isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['lastActivity']) && incoming().lastActivity == request.time;
+    }
+
+    match /forum_posts/{topicId}/messages/{messageId} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && isValidForumPost(incoming());
+    }
   }
 }

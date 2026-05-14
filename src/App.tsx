@@ -13,6 +13,9 @@ import { Notifications } from './pages/Notifications';
 import { Videos } from './pages/Videos';
 import { VideoPlayer } from './pages/VideoPlayer';
 import { Channel } from './pages/Channel';
+import { GlobalChat } from './pages/GlobalChat';
+import { Forum } from './pages/Forum';
+import { TopicDetail } from './pages/TopicDetail';
 
 export default function App() {
   return (
@@ -24,8 +27,11 @@ export default function App() {
             <Route path="videos" element={<Videos />} />
             <Route path="watch/:id" element={<VideoPlayer />} />
             <Route path="channel/:username" element={<Channel />} />
+            <Route path="forum" element={<Forum />} />
+            <Route path="forum/topic/:topicId" element={<TopicDetail />} />
             <Route path="u/:username" element={<Profile />} />
             <Route path="messages" element={<Messages />} />
+            <Route path="global-chat" element={<GlobalChat />} />
             <Route path="about" element={<About />} />
             <Route path="notifications" element={<Notifications />} />
           </Route>

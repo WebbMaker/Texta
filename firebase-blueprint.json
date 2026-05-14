@@ -91,6 +91,22 @@
     "typing_status/{comboId}": {
       "schema": "object",
       "description": "Real-time typing indicators"
+    },
+    "presence/{sessionId}": {
+      "schema": "object",
+      "description": "Real-time session presence tracking"
+    },
+    "global_messages/{messageId}": {
+      "schema": "object",
+      "description": "Public global chat messages"
+    },
+    "forum_topics/{topicId}": {
+      "schema": "object",
+      "description": "Discussion topics in the forum"
+    },
+    "forum_posts/{topicId}/messages/{messageId}": {
+      "schema": "object",
+      "description": "Messages/posts within a specific forum topic"
     }
   }
 }
