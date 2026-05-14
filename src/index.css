@@ -1,39 +1,60 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-neon-blue: #00f2ff;
-  --color-neon-purple: #bc13fe;
-  --color-bg-dark: #121212;
-  --color-surface: #1e1e1e;
-  --color-text-dim: #888888;
+  --color-neon-blue: #007aff; /* iOS Blue */
+  --color-neon-purple: #5856d6; /* iOS Purple */
+  --color-bg-dark: #000000;
+  --color-surface: rgba(28, 28, 30, 0.7);
+  --color-glass-light: rgba(255, 255, 255, 0.08);
+  --color-glass-border: rgba(255, 255, 255, 0.12);
+  --color-text-dim: #8e8e93; /* iOS Dim Text */
   
-  --font-sans: 'Space Grotesk', sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Outfit', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-ios: 20px;
+  --radius-ios-large: 28px;
+}
+
+@utility glass-effect {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@utility liquid-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 
 /* Markdown Styles */
 .markdown-content {
-  @apply text-gray-200 leading-relaxed break-words;
+  @apply text-white leading-relaxed break-words font-sans;
 }
 
-.markdown-content h1 { @apply text-2xl font-bold mb-4 mt-6 text-white; }
-.markdown-content h2 { @apply text-xl font-bold mb-3 mt-5 text-white; }
-.markdown-content h3 { @apply text-lg font-bold mb-2 mt-4 text-white; }
+.markdown-content h1 { @apply text-2xl font-bold mb-4 mt-6 text-white font-display; }
+.markdown-content h2 { @apply text-xl font-bold mb-3 mt-5 text-white font-display; }
+.markdown-content h3 { @apply text-lg font-bold mb-2 mt-4 text-white font-display; }
 .markdown-content p { @apply mb-4 last:mb-0; }
 .markdown-content ul { @apply list-disc ml-6 mb-4; }
 .markdown-content ol { @apply list-decimal ml-6 mb-4; }
 .markdown-content li { @apply mb-1; }
-.markdown-content blockquote { @apply border-l-4 border-gray-700 pl-4 italic my-4 text-gray-400; }
-.markdown-content code { @apply bg-gray-900 px-1.5 py-0.5 rounded font-mono text-sm text-neon-blue; }
-.markdown-content pre { @apply bg-transparent p-0 my-4 overflow-x-auto rounded-lg; }
+.markdown-content blockquote { @apply border-l-4 border-white/20 pl-4 italic my-4 text-white/60; }
+.markdown-content code { @apply bg-white/10 px-1.5 py-0.5 rounded font-mono text-sm text-neon-blue; }
+.markdown-content pre { @apply bg-black/40 p-4 my-4 overflow-x-auto rounded-2xl border border-white/10; }
 .markdown-content pre code { @apply bg-transparent p-0 text-inherit; }
 .markdown-content a { @apply text-neon-blue hover:underline; }
-.markdown-content table { @apply w-full border-collapse mb-4; }
-.markdown-content th, .markdown-content td { @apply border border-gray-800 p-2 text-left; }
-.markdown-content th { @apply bg-gray-900; }
 
 body {
   background-color: var(--color-bg-dark);
   color: #ffffff;
+  font-family: var(--font-sans);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(0, 122, 255, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(88, 86, 214, 0.05) 0px, transparent 50%);
+  background-attachment: fixed;
 }

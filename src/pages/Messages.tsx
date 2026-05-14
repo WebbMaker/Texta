@@ -201,26 +201,32 @@ export function Messages() {
     e.preventDefault();
     if (!user || !selectedFriend || (!newMessage.trim() && !imageUrl)) return;
     
+    const messageToSend = newMessage.trim();
+    const imageToSend = imageUrl;
+
+    // Clear input immediately for instant feedback
+    setNewMessage('');
+    setImageUrl(null);
+    handleTyping(false);
+    
     const participants = [user.uid, selectedFriend.uid].sort();
     try {
       const msg: any = {
         participants,
         senderId: user.uid,
-        content: newMessage.trim(),
+        content: messageToSend,
         createdAt: Date.now(),
         seen: false
       };
-      if (imageUrl) {
-         msg.imageUrl = imageUrl;
+      if (imageToSend) {
+         msg.imageUrl = imageToSend;
       }
       await addDoc(collection(db, 'private_messages'), msg);
-      setNewMessage('');
-      setImageUrl(null);
-      
-      // Stop typing immediately
-      handleTyping(false);
     } catch(err) {
       console.error(err);
+      // Restore message if error occurs so user doesn't lose it
+      setNewMessage(messageToSend);
+      setImageUrl(imageToSend);
     }
   }
 
@@ -275,7 +281,7 @@ export function Messages() {
   };
 
   if (!user) {
-    return <div className="text-center text-gray-500 font-mono py-12">WYMAGANA_AUTORYZACJA_SYSTEMU</div>;
+    return <div className="text-center text-gray-500 font-sans py-12">Zaloguj się, aby rozmawiać</div>;
   }
 
   return (
@@ -309,8 +315,8 @@ export function Messages() {
         )}
 
         <div className="bg-surface border border-gray-800 rounded-2xl p-4 flex-1 overflow-y-auto shadow-[0_0_20px_rgba(0,0,0,0.3)]">
-          <h2 className="text-sm font-bold text-text-dim tracking-widest uppercase font-mono pb-2 mb-4 border-b border-gray-800">
-            LISTA_ZNAJOMYCH
+          <h2 className="text-sm font-bold text-text-dim tracking-widest uppercase font-sans pb-2 mb-4 border-b border-gray-800">
+            Znajomi
           </h2>
           {friends.length === 0 ? (
             <p className="text-xs text-gray-500 font-mono">Nie znaleziono połączonych węzłów. Wyszukaj użytkowników, aby ich dodać.</p>
@@ -355,7 +361,7 @@ export function Messages() {
              
              <div className="flex-1 overflow-y-auto p-4 space-y-4">
                {messages.length === 0 ? (
-                 <p className="text-center text-gray-500 font-mono text-sm mt-10">Brak historii transmisji.</p>
+                 <p className="text-center text-gray-500 font-sans text-sm mt-10">Brak historii wiadomości.</p>
                ) : (
                  messages.map((msg, index) => {
                    const isMe = msg.senderId === user.uid;
@@ -418,8 +424,8 @@ export function Messages() {
                     type="text"
                     value={newMessage}
                     onChange={(e) => onInputChange(e.target.value)}
-                    placeholder="Zacznij transmisję..."
-                    className="flex-1 bg-transparent border-2 border-gray-800 rounded-xl px-4 py-2 outline-none focus:border-neon-blue font-mono text-white"
+                    placeholder="Napisz wiadomość..."
+                    className="flex-1 bg-transparent border-2 border-gray-800 rounded-xl px-4 py-2 outline-none focus:border-neon-blue font-sans text-white"
                   />
                   <button 
                     type="submit"
@@ -432,8 +438,8 @@ export function Messages() {
              </form>
            </>
          ) : (
-           <div className="flex-1 flex items-center justify-center text-gray-500 font-mono text-sm px-4 text-center">
-             Wybierz znajomego, aby otworzyć kanał transmisji.
+           <div className="flex-1 flex items-center justify-center text-gray-500 font-sans text-sm px-4 text-center">
+             Wybierz znajomego, aby rozpocząć rozmowę.
            </div>
          )}
       </div>

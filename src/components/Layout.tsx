@@ -95,81 +95,77 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-bg-dark text-white font-sans selection:bg-neon-blue/30 flex flex-col">
+    <div className="min-h-screen bg-bg-dark text-white selection:bg-neon-blue/30 flex flex-col">
       <UsernameModal />
       
-      <header className="sticky top-0 z-40 border-b border-gray-800 bg-bg-dark">
+      <header className="sticky top-0 z-40 border-b border-white/5 bg-black/60 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity group flex-shrink-0">
-            <div className="w-10 h-10 bg-gradient-to-br from-neon-blue to-neon-purple rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(0,242,255,0.4)] group-hover:shadow-[0_0_20px_rgba(188,19,254,0.6)] transition-shadow">
-              <span className="text-bg-dark font-black text-2xl tracking-tighter mt-0.5">T</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-neon-blue to-neon-purple rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+              <span className="text-white font-black text-2xl tracking-tighter mt-0.5">T</span>
             </div>
-            <span className="text-3xl font-black tracking-tighter lowercase hidden sm:inline-block">
-              texta<span className="text-neon-blue animate-pulse">_</span>
+            <span className="text-2xl font-black tracking-tight font-display hidden sm:inline-block">
+              texta
             </span>
           </Link>
 
           <form onSubmit={handleSearch} className="flex-1 max-w-lg relative hidden sm:block">
              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-500" />
+                <Search className="h-4 w-4 text-white/30" />
              </div>
              <input 
                type="text" 
-               className="w-full bg-surface border border-gray-800 text-white rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-neon-purple text-sm font-mono placeholder-gray-500" 
-               placeholder="Szukaj użytkownika..." 
+               className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-10 pr-4 py-2 focus:outline-none focus:border-neon-blue/50 focus:bg-white/10 transition-all text-sm placeholder-white/30" 
+               placeholder="Szukaj..." 
                value={searchQuery}
                onChange={(e) => setSearchQuery(e.target.value)}
              />
           </form>
           
-          <div className="hidden md:flex items-center gap-4 px-4 py-1.5 bg-surface/30 border border-gray-800 rounded-xl ml-2">
+          <div className="hidden md:flex items-center gap-4 px-4 py-1.5 bg-white/5 border border-white/10 rounded-2xl ml-2 backdrop-blur-md">
             <div className="flex flex-col items-center">
-              <span className="text-[9px] font-mono text-gray-500 uppercase tracking-[0.2em] leading-none mb-0.5">Konta</span>
-              <span className="text-sm font-black text-white leading-none tracking-tighter italic">{totalUsers}</span>
+              <span className="text-[9px] font-medium text-white/40 uppercase tracking-wider leading-none mb-0.5">Użytkownicy</span>
+              <span className="text-sm font-bold text-white leading-none">{totalUsers}</span>
             </div>
-            <div className="w-px h-6 bg-gray-800 opacity-50"></div>
+            <div className="w-px h-6 bg-white/10"></div>
             <div className="flex flex-col items-center">
               <div className="flex items-center gap-1 mb-0.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                <span className="text-[9px] font-mono text-gray-500 uppercase tracking-[0.2em] leading-none">Live</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                <span className="text-[9px] font-medium text-white/40 uppercase tracking-wider leading-none">Live</span>
               </div>
-              <span className="text-sm font-black text-green-500 leading-none tracking-tighter italic">{onlineUsers}</span>
+              <span className="text-sm font-bold text-green-500 leading-none">{onlineUsers}</span>
             </div>
           </div>
 
           <nav className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
             {profile ? (
               <>
-                <Link to="/notifications" className="text-gray-400 hover:text-neon-purple transition-colors relative" title="Powiadomienia">
+                <Link to="/notifications" className="text-white/60 hover:text-white transition-colors relative" title="Powiadomienia">
                    <Bell className="w-6 h-6" />
                    {unreadNotifs > 0 && (
-                     <span className="absolute -top-1 -right-1 bg-neon-purple text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                     <span className="absolute -top-1 -right-1 bg-neon-purple text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full ring-2 ring-black">
                        {unreadNotifs > 9 ? '9+' : unreadNotifs}
                      </span>
                    )}
                 </Link>
-                <Link to="/messages" className="text-gray-400 hover:text-neon-blue transition-colors relative" title="Wiadomości">
+                <Link to="/messages" className="text-white/60 hover:text-white transition-colors relative" title="Wiadomości">
                    <Send className="w-6 h-6" />
                    {unreadMessages > 0 && (
-                     <span className="absolute -top-1 -right-1 bg-neon-blue text-black text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                     <span className="absolute -top-1 -right-1 bg-neon-blue text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full ring-2 ring-black">
                        {unreadMessages > 9 ? '9+' : unreadMessages}
                      </span>
                    )}
                 </Link>
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-gray-900 rounded-full border border-gray-800">
-                   <div className="w-2 h-2 rounded-full bg-neon-blue animate-pulse"></div>
-                   <span className="text-xs font-mono text-neon-blue">DOSTĘPNY</span>
-                </div>
                 <div className="flex items-center gap-4">
                   <Link to={`/u/${profile.username}`} className="flex items-center gap-2 group">
-                    <UserAvatar userId={profile.uid} username={profile.username} className="w-8 h-8 group-hover:ring-2 ring-neon-blue transition-all" />
-                    <span className="text-sm font-semibold group-hover:text-neon-blue transition-colors hidden sm:block">
-                      @{profile.username}
+                    <UserAvatar userId={profile.uid} username={profile.username} className="w-8 h-8 rounded-full border border-white/10 group-hover:scale-105 transition-all" />
+                    <span className="text-sm font-medium group-hover:text-neon-blue transition-colors hidden sm:block">
+                      {profile.username}
                     </span>
                   </Link>
                   <button 
                     onClick={signOut}
-                    className="text-gray-500 hover:text-red-400 transition-colors"
+                    className="text-white/40 hover:text-red-400 transition-colors"
                     title="Wyloguj się"
                   >
                     <LogOut className="w-5 h-5" />
@@ -177,20 +173,20 @@ export function Layout() {
                 </div>
               </>
             ) : user ? (
-              <span className="text-sm font-mono text-gray-500">SYSTEM.INICJALIZACJA()</span>
+              <span className="text-sm font-medium text-white/40">Inicjalizacja...</span>
             ) : (
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setAuthModal({ open: true, mode: 'login' })}
-                  className="text-sm border border-gray-700 text-white px-4 py-2 rounded-lg font-bold tracking-widest uppercase hover:bg-gray-800 transition-all whitespace-nowrap"
+                  className="text-sm text-white/80 px-4 py-2 rounded-xl font-semibold hover:bg-white/5 transition-all whitespace-nowrap"
                 >
-                  Zaloguj się
+                  Zaloguj
                 </button>
                 <button 
                   onClick={() => setAuthModal({ open: true, mode: 'register' })}
-                  className="text-sm bg-neon-purple text-white px-4 py-2 sm:px-6 rounded-lg font-bold tracking-widest uppercase hover:brightness-110 transition-all shadow-[0_0_15px_rgba(188,19,254,0.3)] whitespace-nowrap"
+                  className="text-sm bg-white text-black px-4 py-2 sm:px-6 rounded-xl font-bold hover:bg-white/90 transition-all shadow-lg whitespace-nowrap"
                 >
-                  Zarejestruj się
+                  Dołącz
                 </button>
               </div>
             )}

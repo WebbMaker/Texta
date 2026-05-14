@@ -120,9 +120,9 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // --- Typing Status ---
     match /typing_status/{comboId} {
-      allow read: if isSignedIn() && comboId.contains(request.auth.uid);
-      allow write: if isSignedIn() && comboId.contains(request.auth.uid);
+      allow read, write: if isSignedIn() && (request.auth.uid in comboId.split('_'));
     }
 
     match /usernames/{lowercaseUsername} {
@@ -286,7 +286,7 @@ service cloud.firestore {
 
     match /forum_posts/{topicId}/messages/{messageId} {
       allow read, list: if true;
-      allow create: if isSignedIn() && isValidForumPost(incoming());
+      allow create: if isSignedIn() && isValidForumPost(incoming()) && exists(/databases/$(database)/documents/forum_topics/$(topicId));
     }
   }
 }

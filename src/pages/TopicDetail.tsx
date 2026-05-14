@@ -121,39 +121,38 @@ export function TopicDetail() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Back button */}
-      <Link to="/forum" className="inline-flex items-center gap-2 text-gray-500 hover:text-white transition-colors font-mono text-[10px] uppercase tracking-widest px-2">
+      <Link to="/forum" className="inline-flex items-center gap-2 text-white/40 hover:text-white transition-colors font-semibold text-[10px] uppercase tracking-widest px-2">
         <ChevronLeft className="w-4 h-4" /> Wróć do forum
       </Link>
 
       {/* Topic Header */}
-      <div className="bg-surface/30 border border-gray-800 rounded-[2.5rem] p-8 backdrop-blur-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-neon-purple/5 rounded-full blur-3xl" />
-        <h1 className="text-3xl font-black text-white uppercase tracking-tighter mb-4 pr-12">{topic?.title}</h1>
-        <p className="text-gray-400 leading-relaxed mb-6 max-w-3xl">{topic?.description}</p>
+      <div className="liquid-glass rounded-[var(--radius-ios-large)] p-8 relative overflow-hidden">
+        <h1 className="text-3xl font-bold text-white tracking-tight mb-4 pr-12 font-display">{topic?.title}</h1>
+        <p className="text-white/60 leading-relaxed mb-6 max-w-3xl font-medium">{topic?.description}</p>
         
-        <div className="flex flex-wrap items-center gap-6 pt-6 border-t border-gray-800/50">
+        <div className="flex flex-wrap items-center gap-6 pt-6 border-t border-white/5">
           <div className="flex items-center gap-2">
-             <User className="w-4 h-4 text-gray-600" />
-             <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Wątek rozpoczęty przez: <span className="text-neon-purple font-bold">{topic?.creatorUsername}</span></span>
+             <UserAvatar userId={topic?.creatorId || ''} username={topic?.creatorUsername || ''} className="w-5 h-5 border border-white/10" />
+             <span className="text-xs text-white/40">Autor: <span className="text-white font-bold">{topic?.creatorUsername}</span></span>
           </div>
           <div className="flex items-center gap-2">
-             <Clock className="w-4 h-4 text-gray-600" />
-             <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">{topic ? formatDate(topic.createdAt) : ''}</span>
+             <Clock className="w-4 h-4 text-white/20" />
+             <span className="text-xs text-white/40 font-medium">{topic ? formatDate(topic.createdAt) : ''}</span>
           </div>
         </div>
       </div>
 
       {/* Discussion Area */}
-      <div className="bg-surface/10 border border-gray-800 rounded-[2.5rem] overflow-hidden flex flex-col h-[600px]">
+      <div className="liquid-glass rounded-[var(--radius-ios-large)] overflow-hidden flex flex-col h-[600px]">
         <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide" ref={scrollRef}>
           {loading ? (
             <div className="flex justify-center items-center h-full">
-              <div className="w-8 h-8 border-2 border-neon-purple border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-8 h-8 border-2 border-white/10 border-t-white rounded-full animate-spin"></div>
             </div>
           ) : posts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center opacity-30">
               <MessageSquare className="w-12 h-12 mb-4" />
-              <p className="font-mono text-sm uppercase tracking-widest">Brak odpowiedzi</p>
+              <p className="text-sm font-semibold uppercase tracking-widest">Brak odpowiedzi</p>
               <p className="text-xs mt-2">Przerwij ciszę jako pierwszy!</p>
             </div>
           ) : (
@@ -168,15 +167,15 @@ export function TopicDetail() {
                   <UserAvatar 
                     userId={post.senderId} 
                     username={post.senderUsername} 
-                    className="w-12 h-12 border border-gray-800"
+                    className="w-12 h-12 border border-white/10 shadow-sm"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">{post.senderUsername}</span>
-                    <span className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">{formatDate(post.createdAt)}</span>
+                    <span className="text-[10px] font-bold text-white uppercase tracking-wider">{post.senderUsername}</span>
+                    <span className="text-[10px] font-medium text-white/20 uppercase tracking-widest">{formatDate(post.createdAt)}</span>
                   </div>
-                  <div className="bg-surface border border-gray-800/50 rounded-2xl rounded-tl-none p-5 text-gray-200 leading-relaxed shadow-sm">
+                  <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-none p-5 text-white/90 leading-relaxed backdrop-blur-sm shadow-sm">
                     {post.text}
                   </div>
                 </div>
@@ -186,29 +185,26 @@ export function TopicDetail() {
         </div>
 
         {/* Input Area */}
-        <div className="p-8 bg-bg-dark/50 backdrop-blur-md border-t border-gray-800">
+        <div className="p-8 bg-white/5 backdrop-blur-xl border-t border-white/5">
           {!user ? (
-            <div className="p-4 text-center bg-gray-900 border border-dashed border-gray-800 rounded-2xl">
-              <p className="text-xs font-mono text-gray-500 uppercase tracking-widest">
+            <div className="p-4 text-center bg-white/5 border border-dashed border-white/10 rounded-2xl">
+              <p className="text-xs font-semibold text-white/30 uppercase tracking-widest">
                 Zaloguj się, aby odpowiedzieć
               </p>
             </div>
           ) : (
             <form onSubmit={handleSendPost} className="relative group">
-              <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-                <Terminal className="w-5 h-5 text-gray-500 group-focus-within:text-neon-purple transition-colors" />
-              </div>
               <textarea 
                 required
                 value={newPost}
                 onChange={(e) => setNewPost(e.target.value)}
                 placeholder="Dodaj swoją odpowiedź..." 
-                className="w-full bg-gray-900 border border-gray-800 rounded-3xl pl-14 pr-16 py-5 text-white placeholder:text-gray-600 focus:outline-none focus:border-neon-purple/50 focus:ring-1 focus:ring-neon-purple/20 transition-all font-mono text-sm h-16 min-h-[4rem] max-h-48 scrollbar-hide"
+                className="w-full bg-white/5 border border-white/10 rounded-[24px] px-6 py-5 text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-all text-sm h-16 min-h-[4rem] max-h-48 scrollbar-hide"
               />
               <button 
                 type="submit"
                 disabled={!newPost.trim()}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-neon-purple text-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-30 disabled:grayscale"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white text-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-30 disabled:grayscale"
               >
                 <Send className="w-5 h-5" />
               </button>

@@ -49,7 +49,14 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
     e.preventDefault();
     if (!user || !profile || (!newComment.trim() && !imageUrl) || newComment.length > 500) return;
 
+    const commentContent = newComment.trim();
+    const mediaUrl = imageUrl;
+
+    // Clear input immediately for instant feedback
+    setNewComment('');
+    setImageUrl(null);
     setIsSubmitting(true);
+
     try {
       const batch = writeBatch(db);
       
@@ -58,12 +65,12 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
         postId: targetId,
         authorId: user.uid,
         authorUsername: profile.username,
-        content: newComment.trim(),
+        content: commentContent,
         createdAt: Date.now(),
         upvoteCount: 0
       };
-      if (imageUrl) {
-         commentData.imageUrl = imageUrl;
+      if (mediaUrl) {
+         commentData.imageUrl = mediaUrl;
       }
       batch.set(newCommentRef, commentData);
 
@@ -79,11 +86,11 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
           relatedId: targetId
         });
       }
-
-      setNewComment('');
-      setImageUrl(null);
     } catch (error) {
       console.error("Error posting comment:", error);
+      // Restore on error
+      setNewComment(commentContent);
+      setImageUrl(mediaUrl);
     } finally {
       setIsSubmitting(false);
     }

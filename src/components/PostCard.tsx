@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Post, Vote } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
-import { Heart, MessageSquare, Trash2, X, Maximize2, Edit3, Save } from 'lucide-react';
+import { Heart, MessageSquare, Trash2, X, Maximize2, Edit3, Save, Clock } from 'lucide-react';
 import { Link } from 'react-router';
 import { toggleVote, createNotification } from '../lib/actions';
 import { db } from '../lib/firebase';
@@ -79,68 +79,72 @@ export function PostCard({ post }: PostCardProps) {
   };
 
   return (
-    <div className="p-6 bg-surface border border-gray-800 rounded-2xl relative overflow-hidden mb-6">
-      <div className="absolute top-0 left-0 w-1 h-full bg-neon-blue"></div>
-      <div className="flex gap-5">
-        <div className="flex-1 overflow-hidden">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-3">
-              <UserAvatar userId={post.authorId} username={post.authorUsername} className="w-10 h-10" />
-              <div>
-                <p className="font-bold text-white">
-                  <Link to={`/u/${post.authorUsername}`} className="hover:underline">
-                    {post.authorUsername}
-                  </Link>
-                  <span className="text-neon-blue font-mono text-sm ml-2 hidden sm:inline-block">@{post.authorUsername}</span>
-                </p>
-                <p className="text-xs text-gray-500 font-mono" title={new Date(post.createdAt).toLocaleString()}>
-                  {formatDistanceToNow(post.createdAt, { addSuffix: true })} • CZAS RZECZYWISTY
-                </p>
-              </div>
+    <div className="liquid-glass rounded-[var(--radius-ios-large)] overflow-hidden mb-8 transition-all hover:scale-[1.005] group/post">
+      {/* Post Header */}
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex items-center gap-4">
+            <UserAvatar userId={post.authorId} username={post.authorUsername} className="w-12 h-12 border border-white/10 shadow-sm" />
+            <div>
+              <p className="font-bold text-white tracking-tight font-display">
+                <Link to={`/u/${post.authorUsername}`} className="hover:text-neon-blue transition-colors">
+                  {post.authorUsername}
+                </Link>
+              </p>
+              <p className="text-[10px] text-white/40 font-medium uppercase tracking-wider flex items-center gap-2 mt-1">
+                <Clock className="w-3 h-3" />
+                {formatDistanceToNow(post.createdAt, { addSuffix: true })}
+              </p>
             </div>
-            
-            {user && (user.uid === post.authorId || profile?.role === 'owner') && (
-              <div className="flex items-center gap-1">
-                {!isEditing ? (
-                  <button 
-                    onClick={() => setIsEditing(true)} 
-                    className="text-gray-500 hover:text-neon-blue p-2 transition-colors"
-                    title="Edytuj post"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => setIsEditing(false)} 
-                    className="text-gray-500 hover:text-white p-2 transition-colors"
-                    title="Anuluj"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-                <button onClick={handleDelete} className="text-gray-500 hover:text-red-400 p-2 transition-colors" title="Usuń post">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            )}
           </div>
+          
+          {user && (user.uid === post.authorId || profile?.role === 'owner') && (
+            <div className="flex items-center gap-1 opacity-0 group-hover/post:opacity-100 transition-opacity">
+              {!isEditing ? (
+                <button 
+                  onClick={() => setIsEditing(true)} 
+                  className="text-white/40 hover:text-white p-2.5 bg-white/5 rounded-xl border border-white/5 transition-all"
+                  title="Edytuj post"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setIsEditing(false)} 
+                  className="text-white/40 hover:text-white p-2.5 bg-white/5 rounded-xl border border-white/5 transition-all"
+                  title="Anuluj"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              <button 
+                onClick={handleDelete} 
+                className="text-white/40 hover:text-red-400 p-2.5 bg-white/5 rounded-xl border border-white/5 transition-all" 
+                title="Usuń post"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
 
+        {/* Content Section */}
+        <div className="space-y-6">
           {isEditing ? (
-            <div className="space-y-4 mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full bg-bg-dark border border-gray-800 rounded-xl p-4 text-white font-mono text-sm focus:ring-1 focus:ring-neon-blue outline-none resize-none"
-                rows={4}
-                placeholder="Treść posta (Markdown wspierany)..."
+                className="w-full bg-white/5 border border-white/10 rounded-2xl p-6 text-white text-sm focus:ring-1 focus:ring-white/20 outline-none resize-none min-h-[150px] backdrop-blur-md"
+                placeholder="Co chcesz zmienić?"
               />
               <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest pl-1">URL Obrazka (opcjonalnie)</label>
+                <label className="text-xs text-white/40 pl-1">Link do obrazka (opcjonalnie)</label>
                 <input
                   type="text"
                   value={editImageUrl}
                   onChange={(e) => setEditImageUrl(e.target.value)}
-                  className="w-full bg-bg-dark border border-gray-800 rounded-xl px-4 py-2 text-white font-mono text-sm focus:ring-1 focus:ring-neon-blue outline-none"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:ring-1 focus:ring-white/20 outline-none backdrop-blur-md"
                   placeholder="https://images.unsplash.com/..."
                 />
               </div>
@@ -160,7 +164,7 @@ export function PostCard({ post }: PostCardProps) {
                     setIsSaving(false);
                   }
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-neon-blue/10 border border-neon-blue/50 text-neon-blue rounded-xl text-xs font-bold hover:bg-neon-blue/20 transition-colors disabled:opacity-50"
+                className="flex items-center gap-3 px-6 py-3 bg-white text-black rounded-xl text-xs font-bold hover:bg-white/90 transition-all disabled:opacity-50 shadow-lg"
               >
                 {isSaving ? 'Zapisywanie...' : (
                   <>
@@ -172,54 +176,75 @@ export function PostCard({ post }: PostCardProps) {
             </div>
           ) : (
             <>
-              <MarkdownContent content={post.content} className="mb-6" />
+              <div className="text-gray-200 leading-relaxed text-base">
+                <MarkdownContent content={post.content} />
+              </div>
 
               {post.imageUrl && (
-                <div className="mb-6 group relative">
-                  <div 
+                <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 w-[240px] h-[240px] flex-shrink-0 shadow-lg">
+                  <img 
+                    src={post.imageUrl} 
+                    alt="post content" 
+                    className="w-full h-full object-cover block group-hover:scale-[1.05] transition-transform duration-500 cursor-zoom-in" 
                     onClick={() => setIsFullscreen(true)}
-                    className="max-w-[45%] rounded-xl overflow-hidden border border-gray-800 bg-black/50 cursor-zoom-in transition-all hover:border-neon-blue relative inline-block"
-                  >
-                    <img 
-                      src={post.imageUrl} 
-                      alt="post content" 
-                      className="w-full h-auto max-h-[400px] object-contain rounded-lg block" 
-                    />
-                    <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Maximize2 className="w-4 h-4 text-white" />
-                    </div>
+                  />
+                  <div className="absolute top-3 right-3 p-1.5 bg-black/60 backdrop-blur-md rounded-xl opacity-0 group-hover:opacity-100 transition-opacity border border-white/5">
+                    <Maximize2 className="w-4 h-4 text-white" />
                   </div>
                 </div>
               )}
             </>
           )}
 
-          <div className="flex items-center gap-8 border-t border-gray-800 pt-4">
+          {/* Action Bar */}
+          <div className="flex items-center gap-4 pt-6 border-t border-white/5">
             <button 
               disabled={isVoting || !user}
               onClick={handleLike}
-              className={`flex items-center gap-2 transition-colors ${userVote === 'upvote' ? 'text-neon-purple' : 'text-gray-500 hover:text-white'}`}
+              className={`flex-1 flex items-center justify-center gap-3 py-3 rounded-2xl transition-all ${
+                userVote === 'upvote' 
+                ? 'bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm shadow-red-500/10' 
+                : 'bg-white/5 text-white/40 hover:text-white border border-white/5 hover:bg-white/10'
+              }`}
             >
-              <Heart className={`w-5 h-5 ${userVote === 'upvote' ? 'fill-current' : ''}`} />
-              <span className="font-mono text-sm">{likes > 0 && likes} {likes === 1 ? 'Polubienie' : 'Polubienia'}</span>
+              <Heart className={`w-5 h-5 ${userVote === 'upvote' ? 'fill-current animate-pulse' : ''}`} />
+              <span className="text-sm font-semibold">
+                {likes > 0 ? `${likes} osób lubi to` : 'Lubię to'}
+              </span>
             </button>
 
             <button 
               onClick={() => setShowComments(!showComments)}
-              className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors"
+              className={`flex-1 flex items-center justify-center gap-3 py-3 rounded-2xl transition-all ${
+                showComments
+                ? 'bg-white/20 text-white border border-white/20 shadow-md'
+                : 'bg-white/5 text-white/40 hover:text-white border border-white/5 hover:bg-white/10'
+              }`}
             >
-              <MessageSquare className="w-5 h-5 text-gray-400" />
-              <span className="font-mono text-sm">{post.commentsCount} Komentarzy</span>
+              <MessageSquare className="w-5 h-5" />
+              <span className="text-sm font-semibold">
+                {post.commentsCount > 0 ? `${post.commentsCount} komentarzy` : 'Komentuj'}
+              </span>
             </button>
           </div>
         </div>
       </div>
 
-      {showComments && (
-        <div className="mt-6 pt-6 border-t border-gray-800">
-           <CommentSection targetId={post.id} targetType="post" authorId={post.authorId} />
-        </div>
-      )}
+      {/* Comments Section */}
+      <AnimatePresence>
+        {showComments && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden bg-white/5 border-t border-white/5 backdrop-blur-md"
+          >
+            <div className="p-6">
+              <CommentSection targetId={post.id} targetType="post" authorId={post.authorId} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Fullscreen Image Portal */}
       <AnimatePresence>
