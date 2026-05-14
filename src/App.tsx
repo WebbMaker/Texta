@@ -12,6 +12,7 @@ import { About } from './pages/About';
 import { Notifications } from './pages/Notifications';
 import { Videos } from './pages/Videos';
 import { VideoPlayer } from './pages/VideoPlayer';
+import { Channel } from './pages/Channel';
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
             <Route index element={<Home />} />
             <Route path="videos" element={<Videos />} />
             <Route path="watch/:id" element={<VideoPlayer />} />
+            <Route path="channel/:username" element={<Channel />} />
             <Route path="u/:username" element={<Profile />} />
             <Route path="messages" element={<Messages />} />
             <Route path="about" element={<About />} />

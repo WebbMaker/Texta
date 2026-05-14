@@ -103,7 +103,19 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
         )}
       </div>
 
-      {profile && (
+      {!user ? (
+        <div className="p-6 bg-surface border border-dashed border-gray-800 rounded-2xl text-center">
+          <p className="text-sm text-gray-500 font-mono uppercase tracking-widest mb-4">
+            Zaloguj się, aby dodać komentarz
+          </p>
+          <button 
+            onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { mode: 'login' } }))}
+            className="text-xs font-black text-white hover:text-red-500 transition-colors uppercase tracking-tighter"
+          >
+            Kliknij tutaj, aby się zalogować
+          </button>
+        </div>
+      ) : profile && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
           {imageUrl && (
             <div className="relative self-start">

@@ -16,7 +16,7 @@ interface CommentItemProps {
 }
 
 export function CommentItem({ comment }: CommentItemProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [isLiked, setIsLiked] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
 
@@ -55,7 +55,8 @@ export function CommentItem({ comment }: CommentItemProps) {
   };
 
   const handleDelete = async () => {
-    if (!user || user.uid !== comment.authorId) return;
+    const isOwner = profile?.role === 'owner';
+    if (!user || (user.uid !== comment.authorId && !isOwner)) return;
     if (window.confirm('Czy na pewno chcesz usunąć ten komentarz?')) {
       try {
         const batch = writeBatch(db);
@@ -88,7 +89,7 @@ export function CommentItem({ comment }: CommentItemProps) {
         <MarkdownContent content={comment.content} mentionColor="purple" />
       </div>
       <div className="flex flex-col items-center justify-start gap-1 pt-1">
-        {user && user.uid === comment.authorId && (
+        {user && (user.uid === comment.authorId || profile?.role === 'owner') && (
           <button 
             onClick={handleDelete}
             className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity mb-2"

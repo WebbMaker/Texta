@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { Post, Vote } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
-import { Heart, MessageSquare, Trash2, X, Maximize2 } from 'lucide-react';
+import { Heart, MessageSquare, Trash2, X, Maximize2, Edit3, Save } from 'lucide-react';
 import { Link } from 'react-router';
 import { toggleVote, createNotification } from '../lib/actions';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
 import { UserAvatar } from './UserAvatar';
 import { CommentSection } from './CommentSection';
 import { MarkdownContent } from './MarkdownContent';
@@ -23,6 +23,12 @@ export function PostCard({ post }: PostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [isVoting, setIsVoting] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // Edit state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(post.content);
+  const [editImageUrl, setEditImageUrl] = useState(post.imageUrl || '');
+  const [isSaving, setIsSaving] = useState(false);
   
   const likes = post.upvoteCount;
 
@@ -61,7 +67,8 @@ export function PostCard({ post }: PostCardProps) {
   };
 
   const handleDelete = async () => {
-    if (!user || user.uid !== post.authorId) return;
+    const isOwner = profile?.role === 'owner';
+    if (!user || (user.uid !== post.authorId && !isOwner)) return;
     if (window.confirm('Czy na pewno chcesz usunąć tę transmisję?')) {
       try {
         await deleteDoc(doc(db, 'posts', post.id));
@@ -92,31 +99,99 @@ export function PostCard({ post }: PostCardProps) {
               </div>
             </div>
             
-            {user && user.uid === post.authorId && (
-              <button onClick={handleDelete} className="text-gray-500 hover:text-red-400 p-2 transition-colors">
-                <Trash2 className="w-4 h-4" />
-              </button>
+            {user && (user.uid === post.authorId || profile?.role === 'owner') && (
+              <div className="flex items-center gap-1">
+                {!isEditing ? (
+                  <button 
+                    onClick={() => setIsEditing(true)} 
+                    className="text-gray-500 hover:text-neon-blue p-2 transition-colors"
+                    title="Edytuj post"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setIsEditing(false)} 
+                    className="text-gray-500 hover:text-white p-2 transition-colors"
+                    title="Anuluj"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                <button onClick={handleDelete} className="text-gray-500 hover:text-red-400 p-2 transition-colors" title="Usuń post">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
 
-          <MarkdownContent content={post.content} className="mb-6" />
-
-          {post.imageUrl && (
-            <div className="mb-6 group relative">
-              <div 
-                onClick={() => setIsFullscreen(true)}
-                className="max-w-[45%] rounded-xl overflow-hidden border border-gray-800 bg-black/50 cursor-zoom-in transition-all hover:border-neon-blue relative inline-block"
-              >
-                <img 
-                   src={post.imageUrl} 
-                   alt="post content" 
-                   className="w-full h-auto max-h-[400px] object-contain rounded-lg block" 
+          {isEditing ? (
+            <div className="space-y-4 mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="w-full bg-bg-dark border border-gray-800 rounded-xl p-4 text-white font-mono text-sm focus:ring-1 focus:ring-neon-blue outline-none resize-none"
+                rows={4}
+                placeholder="Treść posta (Markdown wspierany)..."
+              />
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest pl-1">URL Obrazka (opcjonalnie)</label>
+                <input
+                  type="text"
+                  value={editImageUrl}
+                  onChange={(e) => setEditImageUrl(e.target.value)}
+                  className="w-full bg-bg-dark border border-gray-800 rounded-xl px-4 py-2 text-white font-mono text-sm focus:ring-1 focus:ring-neon-blue outline-none"
+                  placeholder="https://images.unsplash.com/..."
                 />
-                <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Maximize2 className="w-4 h-4 text-white" />
-                </div>
               </div>
+              <button
+                disabled={isSaving || !editContent.trim()}
+                onClick={async () => {
+                  setIsSaving(true);
+                  try {
+                    await updateDoc(doc(db, 'posts', post.id), {
+                      content: editContent,
+                      imageUrl: editImageUrl || null
+                    });
+                    setIsEditing(false);
+                  } catch (err) {
+                    console.error("Failed to update post:", err);
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-neon-blue/10 border border-neon-blue/50 text-neon-blue rounded-xl text-xs font-bold hover:bg-neon-blue/20 transition-colors disabled:opacity-50"
+              >
+                {isSaving ? 'Zapisywanie...' : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Zapisz zmiany
+                  </>
+                )}
+              </button>
             </div>
+          ) : (
+            <>
+              <MarkdownContent content={post.content} className="mb-6" />
+
+              {post.imageUrl && (
+                <div className="mb-6 group relative">
+                  <div 
+                    onClick={() => setIsFullscreen(true)}
+                    className="max-w-[45%] rounded-xl overflow-hidden border border-gray-800 bg-black/50 cursor-zoom-in transition-all hover:border-neon-blue relative inline-block"
+                  >
+                    <img 
+                      src={post.imageUrl} 
+                      alt="post content" 
+                      className="w-full h-auto max-h-[400px] object-contain rounded-lg block" 
+                    />
+                    <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Maximize2 className="w-4 h-4 text-white" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <div className="flex items-center gap-8 border-t border-gray-800 pt-4">

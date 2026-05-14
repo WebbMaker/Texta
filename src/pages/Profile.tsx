@@ -4,17 +4,20 @@ import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, setDoc, deleteDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { Post, UserProfile } from '../types';
 import { UserAvatar } from '../components/UserAvatar';
+import { UserPresence } from '../components/UserPresence';
 import { PostCard } from '../components/PostCard';
 import { EditProfileModal } from '../components/EditProfileModal';
 import { MarkdownContent } from '../components/MarkdownContent';
-import { TerminalSquare, Clock, Heart, UserPlus, Check, Clock3 } from 'lucide-react';
+import { TerminalSquare, Clock, Heart, UserPlus, Check, Clock3, ShieldCheck, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router';
 
 const POSTS_PER_PAGE = 10;
 
 export function Profile() {
   const { username } = useParams<{ username: string }>();
-  const { user, profile: myProfile } = useAuth();
+  const { user, profile: myProfile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,14 +232,25 @@ export function Profile() {
             <UserAvatar 
                 userId={profile.uid} 
                 username={profile.username} 
-                className="w-24 h-24 border-4 shadow-lg"
+                className="w-24 h-24 border-4 shadow-2xl"
                 fallbackClassName="text-3xl bg-gray-800"
-                style={{ borderColor: themeColor, boxShadow: `0 0 15px ${themeColor}40` }} 
+                style={{ borderColor: themeColor, boxShadow: `0 0 30px ${themeColor}40` }} 
             />
             <div>
-              <h1 className="text-4xl font-bold text-white tracking-tight mb-1">{profile.username}</h1>
-              <div className="font-mono text-sm mb-3" style={{ color: themeColor }}>
-                @{profile.username}
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-4xl font-bold text-white tracking-tight">{profile.username}</h1>
+                {profile.role === 'owner' && (
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/20 border border-red-500/50 text-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.3)]">
+                    <ShieldCheck className="w-3 h-3" />
+                    Zweryfikowany właściciel
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="font-mono text-sm" style={{ color: themeColor }}>
+                  @{profile.username}
+                </div>
+                {isFriend && <UserPresence userId={profile.uid} />}
               </div>
               <div className="flex gap-4">
                  <div className="flex items-center gap-2 text-xs text-text-dim font-mono bg-bg-dark px-3 py-1.5 rounded-lg border border-gray-800">
@@ -249,14 +263,26 @@ export function Profile() {
             </div>
           </div>
           
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex flex-col sm:flex-row gap-3">
              {isOwnProfile ? (
-                 <button 
-                   onClick={() => setShowEditModal(true)}
-                   className="mt-4 sm:mt-0 bg-transparent border-2 border-gray-700 text-white px-6 py-2 rounded-xl font-bold uppercase text-sm tracking-widest hover:border-gray-500 transition-colors"
-                 >
-                   Edytuj Profil
-                 </button>
+               <>
+                  <button 
+                    onClick={() => setShowEditModal(true)}
+                    className="mt-4 sm:mt-0 bg-transparent border-2 border-gray-700 text-white px-6 py-2 rounded-xl font-bold uppercase text-sm tracking-widest hover:border-gray-500 transition-colors"
+                  >
+                    Edytuj Profil
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      await signOut();
+                      navigate('/');
+                    }}
+                    className="mt-4 sm:mt-0 bg-red-500/10 border-2 border-red-500/50 text-red-500 px-6 py-2 rounded-xl font-bold uppercase text-sm tracking-widest hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Wyloguj
+                  </button>
+               </>
              ) : user ? (
                  isFriend ? (
                    <button 

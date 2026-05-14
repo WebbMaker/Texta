@@ -3,6 +3,7 @@ import { auth, db } from "../lib/firebase";
 import { onAuthStateChanged, User, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut } from "firebase/auth";
 import { doc, onSnapshot, getDoc, setDoc, updateDoc, increment } from "firebase/firestore";
 import { UserProfile } from "../types";
+import { OWNER_EMAIL } from "../constants";
 
 interface AuthContextType {
   user: User | null;
@@ -20,36 +21,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Generate a session ID for guest tracking
+    let sessionId = sessionStorage.getItem('presence_session_id');
+    if (!sessionId) {
+      sessionId = Math.random().toString(36).substring(2, 15);
+      sessionStorage.setItem('presence_session_id', sessionId);
+    }
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       
       if (currentUser) {
         const profileRef = doc(db, 'users', currentUser.uid);
-        
-        const setOffline = () => {
-          updateDoc(profileRef, { isOnline: false, lastActive: Date.now() }).catch(() => {});
-        };
-
-        window.addEventListener('beforeunload', setOffline);
-
-        // Presence / Time spent tracker
-        const heartbeat = setInterval(() => {
-           updateDoc(profileRef, {
-             lastActive: Date.now(),
-             isOnline: true,
-             totalTimeSpent: increment(60) // Add 60 seconds every minute
-           }).catch(() => {});
-        }, 60000);
-
-        // Initial presence update
-        updateDoc(profileRef, {
-           lastActive: Date.now(),
-           isOnline: true
-        }).catch(() => {});
-
         const unsubscribeProfile = onSnapshot(profileRef, (snap) => {
           if (snap.exists()) {
-            setProfile({ uid: snap.id, ...snap.data() } as UserProfile);
+            const data = snap.data();
+            const isAdmin = currentUser.email === OWNER_EMAIL;
+            
+            if (isAdmin && data.role !== 'owner') {
+              updateDoc(profileRef, { role: 'owner' }).catch(() => {});
+            }
+
+            setProfile({ uid: snap.id, ...data, role: isAdmin ? 'owner' : data.role } as UserProfile);
           } else {
             setProfile(null);
           }
@@ -60,9 +53,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         
         return () => {
-          window.removeEventListener('beforeunload', setOffline);
-          clearInterval(heartbeat);
-          setOffline();
           unsubscribeProfile();
         };
       } else {
@@ -71,7 +61,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => unsubscribeAuth();
+    // Unified Presence Logic (Users & Guests)
+    const presenceRef = doc(db, 'presence', sessionId);
+
+    const updatePresence = (active: boolean) => {
+      setDoc(presenceRef, {
+        uid: auth.currentUser?.uid || null,
+        isOnline: active,
+        lastActive: Date.now(),
+        updatedAt: Date.now()
+      }, { merge: true }).catch(() => {});
+
+      // For logged in users, also update the users collection
+      if (auth.currentUser) {
+        updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          isOnline: active,
+          lastActive: Date.now()
+        }).catch(() => {});
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      updatePresence(document.visibilityState === 'visible');
+    };
+
+    const handleUnload = () => {
+      updatePresence(false);
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Initial heartbeats
+    updatePresence(true);
+    const heartbeat = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        updatePresence(true);
+        
+        // Track time for logged in users
+        if (auth.currentUser) {
+          updateDoc(doc(db, 'users', auth.currentUser.uid), {
+            totalTimeSpent: increment(60)
+          }).catch(() => {});
+        }
+      }
+    }, 60000);
+
+    return () => {
+      unsubscribeAuth();
+      window.removeEventListener('beforeunload', handleUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(heartbeat);
+      updatePresence(false);
+    };
   }, []);
 
   const signInWithGoogle = async () => {

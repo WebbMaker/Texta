@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot, updateDoc, increment, collection, query, orderBy, limit, getDocs, getDoc, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, increment, collection, query, orderBy, limit, getDocs, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { Video } from '../types';
-import { Heart, Eye, Calendar, Share2, MoreHorizontal, User, Play, ChevronRight, MessageSquare, Edit3, Check } from 'lucide-react';
+import { Heart, Eye, Calendar, Share2, MoreHorizontal, User, Play, ChevronRight, MessageSquare, Edit3, Check, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CommentSection } from '../components/CommentSection';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,7 +17,9 @@ export function VideoPlayer() {
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showShareNotification, setShowShareNotification] = useState(false);
+  const [showLoginNotification, setShowLoginNotification] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const viewCountedRef = useRef<string | null>(null);
 
@@ -51,6 +53,15 @@ export function VideoPlayer() {
 
     trackView().catch(console.error);
   }, [id, user]);
+
+  useEffect(() => {
+    if (!video || !user) return;
+    const subRef = doc(db, 'users', video.authorId, 'subscribers', user.uid);
+    const unsubscribe = onSnapshot(subRef, (docSnap) => {
+      setIsSubscribed(docSnap.exists());
+    });
+    return () => unsubscribe();
+  }, [video, user]);
 
   useEffect(() => {
     if (!id) return;
@@ -87,6 +98,48 @@ export function VideoPlayer() {
     navigator.clipboard.writeText(window.location.href);
     setShowShareNotification(true);
     setTimeout(() => setShowShareNotification(false), 3000);
+  };
+
+  const handleLike = async () => {
+    if (!user) {
+      setShowLoginNotification(true);
+      setTimeout(() => setShowLoginNotification(false), 3000);
+      return;
+    }
+
+    if (!video) return;
+    
+    try {
+      await updateDoc(doc(db, 'videos', video.id), {
+        likes: increment(1)
+      });
+    } catch (error) {
+      console.error("Error liking video:", error);
+    }
+  };
+
+  const handleSubscribe = async () => {
+    if (!user) {
+      setShowLoginNotification(true);
+      setTimeout(() => setShowLoginNotification(false), 3000);
+      return;
+    }
+    if (!video || video.authorId === user.uid) return;
+
+    const subRef = doc(db, 'users', video.authorId, 'subscribers', user.uid);
+    const authorRef = doc(db, 'users', video.authorId);
+
+    try {
+      if (isSubscribed) {
+        await deleteDoc(subRef);
+        await updateDoc(authorRef, { subscribersCount: increment(-1) });
+      } else {
+        await setDoc(subRef, { subscribedAt: Date.now() });
+        await updateDoc(authorRef, { subscribersCount: increment(1) });
+      }
+    } catch (error) {
+      console.error("Error toggling subscription:", error);
+    }
   };
 
   if (loading) {
@@ -127,6 +180,20 @@ export function VideoPlayer() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {showLoginNotification && (
+          <motion.div
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+            className="fixed top-8 left-1/2 -translate-x-1/2 z-[70] bg-red-600 text-white px-6 py-3 rounded-2xl font-black uppercase tracking-tighter shadow-[0_0_30px_rgba(220,38,38,0.3)] flex items-center gap-3"
+          >
+            <ShieldAlert className="w-5 h-5" />
+            Musisz się najpierw zalogować!
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         {/* Main Player Column */}
         <div className="lg:col-span-8">
@@ -158,8 +225,8 @@ export function VideoPlayer() {
 
             <div className="flex flex-wrap items-center justify-between gap-6 pb-8 border-b border-gray-800">
               <div className="flex items-center gap-6">
-                <Link to={`/u/${video.authorUsername}`} className="flex items-center gap-3 group">
-                  <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center border border-gray-700 group-hover:border-red-500 transition-colors overflow-hidden">
+                <Link to={`/channel/${video.authorUsername}`} className="flex items-center gap-3 group">
+                  <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-full flex items-center justify-center border border-gray-700 group-hover:border-red-500 transition-colors overflow-hidden">
                     <User className="w-6 h-6 text-gray-500" />
                   </div>
                   <div>
@@ -167,15 +234,26 @@ export function VideoPlayer() {
                     <p className="text-xs font-mono text-gray-500 uppercase tracking-widest">Weryfikacja: OK</p>
                   </div>
                 </Link>
-                <button className="bg-white text-black px-8 py-3 rounded-2xl font-black text-sm uppercase tracking-tighter hover:bg-gray-100 active:scale-95 transition-all">
-                  Subskrybuj
-                </button>
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleSubscribe}
+                  disabled={user?.uid === video.authorId}
+                  className={`px-8 py-3 rounded-2xl font-black text-sm uppercase tracking-tighter transition-all flex items-center gap-2 ${
+                    isSubscribed 
+                      ? 'bg-gray-800 text-gray-400' 
+                      : 'bg-white text-black hover:bg-gray-100 shadow-[0_0_20px_rgba(255,255,255,0.2)]'
+                  } ${user?.uid === video.authorId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {isSubscribed ? <Check className="w-4 h-4" /> : null}
+                  {isSubscribed ? 'Subskrybujesz' : 'Subskrybuj'}
+                </motion.button>
               </div>
 
               <div className="flex items-center gap-3">
                 <div className="flex items-center bg-surface border border-gray-800 rounded-2xl overflow-hidden">
                   <button 
-                    onClick={() => updateDoc(doc(db, 'videos', video.id), { likes: increment(1) })}
+                    onClick={handleLike}
                     className="flex items-center gap-2 px-6 py-3 hover:bg-gray-800 transition-colors text-white font-bold border-r border-gray-800"
                   >
                     <Heart className="w-5 h-5 text-red-500 fill-red-500" />

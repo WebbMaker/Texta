@@ -26,12 +26,15 @@ export interface UserProfile {
   username: string;
   lowercaseUsername: string;
   bio?: string;
+  channelDescription?: string;
+  subscribersCount?: number;
   createdAt: number;
   avatarUrl?: string;
   themeColor?: string;
   totalTimeSpent?: number;
   isOnline?: boolean;
   lastActive?: number;
+  role?: 'owner' | 'user';
 }
 
 export interface Post {
@@ -74,4 +77,5 @@ export interface Video {
   createdAt: number;
   likes: number;
   commentsCount?: number;
+  tags?: string[];
 }

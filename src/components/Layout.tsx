@@ -13,8 +13,49 @@ export function Layout() {
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [onlineUsers, setOnlineUsers] = useState(0);
   const [authModal, setAuthModal] = useState<{ open: boolean, mode: 'login' | 'register' }>({ open: false, mode: 'login' });
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Total users count
+    const unsubscribeTotal = onSnapshot(collection(db, 'users'), (snap) => {
+      setTotalUsers(snap.docs.length);
+    }, (err) => {
+      console.error('Total users count error:', err);
+    });
+
+    // Online users count from presence collection
+    const qPresence = query(
+      collection(db, 'presence'), 
+      where('isOnline', '==', true)
+    );
+    
+    const unsubscribeOnline = onSnapshot(qPresence, (snap) => {
+      // Filter out stale sessions manually if they haven't been updated in 5 minutes
+      // (in case heartbeat failed or user crashed)
+      const now = Date.now();
+      const fiveMinutesAgo = now - (5 * 60 * 1000);
+      const activeSessions = snap.docs.filter(doc => (doc.data().updatedAt || 0) > fiveMinutesAgo);
+      setOnlineUsers(activeSessions.length);
+    }, (err) => {
+      console.error('Online users count error:', err);
+    });
+
+    return () => {
+      unsubscribeTotal();
+      unsubscribeOnline();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOpenAuth = (e: any) => {
+      setAuthModal({ open: true, mode: e.detail?.mode || 'login' });
+    };
+    window.addEventListener('open-auth-modal', handleOpenAuth);
+    return () => window.removeEventListener('open-auth-modal', handleOpenAuth);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -57,7 +98,7 @@ export function Layout() {
       <UsernameModal />
       
       <header className="sticky top-0 z-40 border-b border-gray-800 bg-bg-dark">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity group flex-shrink-0">
             <div className="w-10 h-10 bg-gradient-to-br from-neon-blue to-neon-purple rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(0,242,255,0.4)] group-hover:shadow-[0_0_20px_rgba(188,19,254,0.6)] transition-shadow">
               <span className="text-bg-dark font-black text-2xl tracking-tighter mt-0.5">T</span>
@@ -67,7 +108,7 @@ export function Layout() {
             </span>
           </Link>
 
-          <form onSubmit={handleSearch} className="flex-1 max-w-xs relative hidden sm:block">
+          <form onSubmit={handleSearch} className="flex-1 max-w-lg relative hidden sm:block">
              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-gray-500" />
              </div>
@@ -79,6 +120,21 @@ export function Layout() {
                onChange={(e) => setSearchQuery(e.target.value)}
              />
           </form>
+          
+          <div className="hidden md:flex items-center gap-4 px-4 py-1.5 bg-surface/30 border border-gray-800 rounded-xl ml-2">
+            <div className="flex flex-col items-center">
+              <span className="text-[9px] font-mono text-gray-500 uppercase tracking-[0.2em] leading-none mb-0.5">Konta</span>
+              <span className="text-sm font-black text-white leading-none tracking-tighter italic">{totalUsers}</span>
+            </div>
+            <div className="w-px h-6 bg-gray-800 opacity-50"></div>
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-1 mb-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                <span className="text-[9px] font-mono text-gray-500 uppercase tracking-[0.2em] leading-none">Live</span>
+              </div>
+              <span className="text-sm font-black text-green-500 leading-none tracking-tighter italic">{onlineUsers}</span>
+            </div>
+          </div>
 
           <nav className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
             <Link to="/videos" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors flex items-center gap-2">

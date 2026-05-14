@@ -14,7 +14,7 @@ interface VideoEditModalProps {
 }
 
 export function VideoEditModal({ isOpen, onClose, video }: VideoEditModalProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState(video.title);
@@ -45,7 +45,8 @@ export function VideoEditModal({ isOpen, onClose, video }: VideoEditModalProps) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || user.uid !== video.authorId || !title || !videoUrl || !thumbnailUrl) return;
+    const isOwner = profile?.role === 'owner';
+    if (!user || (user.uid !== video.authorId && !isOwner) || !title || !videoUrl || !thumbnailUrl) return;
 
     setLoading(true);
     try {
@@ -66,6 +67,8 @@ export function VideoEditModal({ isOpen, onClose, video }: VideoEditModalProps) 
   };
 
   const handleDelete = async () => {
+    const isOwner = profile?.role === 'owner';
+    if (!user || (user.uid !== video.authorId && !isOwner)) return;
     if (!window.confirm('Czy na pewno chcesz usunąć ten film?')) return;
     
     setLoading(true);
@@ -119,14 +122,16 @@ export function VideoEditModal({ isOpen, onClose, video }: VideoEditModalProps) 
                     <p className="text-gray-500 font-mono text-xs">Zaktualizuj dane w systemie.</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
-                  title="Usuń film"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                {(user?.uid === video.authorId || profile?.role === 'owner') && (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
+                    title="Usuń film"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
               </div>
 
               <div className="space-y-6">

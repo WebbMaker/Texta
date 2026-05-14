@@ -17,6 +17,7 @@ export function VideoUploadModal({ isOpen, onClose }: VideoUploadModalProps) {
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [tags, setTags] = useState('');
 
   const getYouTubeId = (url: string) => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -39,6 +40,8 @@ export function VideoUploadModal({ isOpen, onClose }: VideoUploadModalProps) {
     setLoading(true);
     try {
       const videoRef = doc(collection(db, 'videos'));
+      const parsedTags = tags.split(/[\s,]+/).filter(t => t.trim().length > 0).map(t => t.toLowerCase().replace(/^#/, ''));
+      
       await setDoc(videoRef, {
         id: videoRef.id,
         authorId: user.uid,
@@ -49,13 +52,21 @@ export function VideoUploadModal({ isOpen, onClose }: VideoUploadModalProps) {
         thumbnailUrl,
         views: 0,
         likes: 0,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        tags: parsedTags
       });
+
+      // Update user profile to indicate they have a channel/videos
+      await setDoc(doc(db, 'users', user.uid), {
+        hasVideos: true
+      }, { merge: true });
+
       onClose();
       setTitle('');
       setDescription('');
       setVideoUrl('');
       setThumbnailUrl('');
+      setTags('');
     } catch (error) {
       console.error('Error uploading video:', error);
       alert('Błąd podczas wrzucania filmu.');
@@ -122,6 +133,17 @@ export function VideoUploadModal({ isOpen, onClose }: VideoUploadModalProps) {
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Opisz swój film..."
                     className="w-full bg-surface border border-gray-800 rounded-xl px-4 py-3 text-white h-24 resize-none focus:outline-none focus:border-red-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2 px-1">Hashtagi (oddzielone spacją lub przecinkiem)</label>
+                  <input
+                    type="text"
+                    value={tags}
+                    onChange={(e) => setTags(e.target.value)}
+                    placeholder="np. gaming, vlog, tech"
+                    className="w-full bg-surface border border-gray-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition-colors"
                   />
                 </div>
 

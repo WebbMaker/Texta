@@ -6,6 +6,7 @@ import { Link } from 'react-router';
 import { Send, Check, X, CheckCheck } from 'lucide-react';
 import { ImageUploadButton } from '../components/ImageUploadButton';
 import { UserAvatar } from '../components/UserAvatar';
+import { UserPresence } from '../components/UserPresence';
 import { MarkdownContent } from '../components/MarkdownContent';
 import { Message, TypingStatus } from '../types';
 import { auth } from '../lib/firebase';
@@ -322,15 +323,16 @@ export function Messages() {
               >
                 <UserAvatar userId={f.uid} username={f.username} className="w-10 h-10 flex-shrink-0" />
                 <div className="flex-1 overflow-hidden">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-white truncate">{f.username}</span>
-                    {f.unreadCount && f.unreadCount > 0 ? (
-                      <span className="bg-neon-blue text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                        {f.unreadCount}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-mono text-gray-500">Połączono</span>
-                    )}
+                  <div className="flex flex-col">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-white truncate">{f.username}</span>
+                      {f.unreadCount && f.unreadCount > 0 ? (
+                        <span className="bg-neon-blue text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ml-2">
+                          {f.unreadCount}
+                        </span>
+                      ) : null}
+                    </div>
+                    <UserPresence userId={f.uid} />
                   </div>
                 </div>
               </button>

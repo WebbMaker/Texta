@@ -23,6 +23,10 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isSystemOwner() {
+      return isSignedIn() && request.auth.token.email == 'anteczeekk@gmail.com';
+    }
+
     // --- Users ---
     function isValidUser(data) {
       return data.keys().hasAll(['username', 'lowercaseUsername', 'createdAt']) &&
@@ -30,22 +34,35 @@ service cloud.firestore {
         data.lowercaseUsername is string && data.lowercaseUsername == data.username.lower() &&
         data.createdAt is number &&
         (!('bio' in data) || (data.bio is string && data.bio.size() <= 160)) &&
+        (!('channelDescription' in data) || (data.channelDescription is string && data.channelDescription.size() <= 150)) &&
+        (!('subscribersCount' in data) || (data.subscribersCount is number)) &&
         (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500000)) &&
         (!('themeColor' in data) || (data.themeColor is string && data.themeColor.size() <= 20)) &&
         (!('totalTimeSpent' in data) || (data.totalTimeSpent is number)) &&
         (!('isOnline' in data) || (data.isOnline is bool)) &&
-        (!('lastActive' in data) || (data.lastActive is number));
+        (!('lastActive' in data) || (data.lastActive is number)) &&
+        (!('role' in data) || (data.role in ['owner', 'user']));
     }
 
     match /users/{userId} {
       allow read: if true;
       allow create: if isSignedIn() && isValidId(userId) && userId == request.auth.uid &&
                     isValidUser(incoming());
-      allow update: if isSignedIn() && userId == request.auth.uid &&
-                    isValidUser(incoming()) &&
-                    incoming().username == existing().username &&
-                    incoming().lowercaseUsername == existing().lowercaseUsername &&
-                    incoming().createdAt == existing().createdAt;
+      allow update: if isSignedIn() && (
+        (userId == request.auth.uid &&
+         isValidUser(incoming()) &&
+         incoming().username == existing().username &&
+         incoming().lowercaseUsername == existing().lowercaseUsername &&
+         incoming().createdAt == existing().createdAt) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['subscribersCount']))
+      );
+      
+      // Subscriptions
+      match /subscribers/{subId} {
+        allow read: if true;
+        allow create: if isSignedIn() && subId == request.auth.uid && isValidId(userId);
+        allow delete: if isSignedIn() && subId == request.auth.uid;
+      }
     }
 
     match /users/{userId}/friends/{friendId} {
@@ -80,7 +97,7 @@ service cloud.firestore {
                     incoming().content == existing().content &&
                     incoming().relatedId == existing().relatedId &&
                     incoming().diff(existing()).affectedKeys().hasOnly(['read']);
-      allow delete: if isSignedIn() && userId == request.auth.uid;
+      allow delete: if isSignedIn() && (userId == request.auth.uid || isSystemOwner());
     }
 
     match /private_messages/{messageId} {
@@ -145,7 +162,7 @@ service cloud.firestore {
                     incoming().content == existing().content &&
                     incoming().createdAt == existing().createdAt &&
                     incoming().diff(existing()).affectedKeys().hasOnly(['upvoteCount', 'downvoteCount', 'commentsCount', 'imageUrl']);
-      allow delete: if isSignedIn() && existing().authorId == request.auth.uid;
+      allow delete: if isSignedIn() && (existing().authorId == request.auth.uid || isSystemOwner());
     }
 
     // --- Votes (Subcollection) ---
@@ -182,7 +199,7 @@ service cloud.firestore {
                     incoming().content == existing().content &&
                     incoming().createdAt == existing().createdAt &&
                     incoming().diff(existing()).affectedKeys().hasOnly(['upvoteCount', 'imageUrl']);
-      allow delete: if isSignedIn() && existing().authorId == request.auth.uid;
+      allow delete: if isSignedIn() && (existing().authorId == request.auth.uid || isSystemOwner());
     }
 
     // --- Comment Votes (Subcollection) ---
@@ -206,7 +223,12 @@ service cloud.firestore {
         (incoming().diff(existing()).affectedKeys().hasOnly(['views', 'likes'])) ||
         (existing().authorId == request.auth.uid && incoming().authorId == existing().authorId)
       );
-      allow delete: if isSignedIn() && existing().authorId == request.auth.uid;
+      allow delete: if isSignedIn() && (existing().authorId == request.auth.uid || isSystemOwner());
+
+      match /viewers/{viewerId} {
+        allow read: if true;
+        allow create, update: if isSignedIn() && viewerId == request.auth.uid;
+      }
     }
   }
 }
