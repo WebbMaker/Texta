@@ -1,28 +1,56 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router';
 import { db } from '../lib/firebase';
-import { doc, onSnapshot, updateDoc, increment, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, increment, collection, query, orderBy, limit, getDocs, getDoc, setDoc } from 'firebase/firestore';
 import { Video } from '../types';
-import { Heart, Eye, Calendar, Share2, MoreHorizontal, User, Play, ChevronRight } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Heart, Eye, Calendar, Share2, MoreHorizontal, User, Play, ChevronRight, MessageSquare, Edit3, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { CommentSection } from '../components/CommentSection';
+import { useAuth } from '../contexts/AuthContext';
+import { VideoEditModal } from '../components/VideoEditModal';
 
 export function VideoPlayer() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [video, setVideo] = useState<Video | null>(null);
   const [recommendations, setRecommendations] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [showShareNotification, setShowShareNotification] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const viewCountedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!id || viewCountedRef.current === id) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-    // Increment views once per mount for this specific ID
-    updateDoc(doc(db, 'videos', id), {
-      views: increment(1)
-    }).catch(console.error);
-    
-    viewCountedRef.current = id;
-  }, [id]);
+  useEffect(() => {
+    if (!id || !user || viewCountedRef.current === id) return;
+
+    const trackView = async () => {
+      const viewRef = doc(db, 'videos', id, 'viewers', user.uid);
+      const viewSnap = await getDoc(viewRef);
+      
+      if (!viewSnap.exists()) {
+        await updateDoc(doc(db, 'videos', id), {
+          views: increment(1)
+        });
+        await setDoc(viewRef, {
+          viewedAt: Date.now()
+        });
+      }
+      viewCountedRef.current = id;
+    };
+
+    trackView().catch(console.error);
+  }, [id, user]);
 
   useEffect(() => {
     if (!id) return;
@@ -55,6 +83,12 @@ export function VideoPlayer() {
     return (match && match[2].length === 11) ? match[2] : null;
   };
 
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setShowShareNotification(true);
+    setTimeout(() => setShowShareNotification(false), 3000);
+  };
+
   if (loading) {
      return (
        <div className="max-w-[1400px] mx-auto px-4 py-8 animate-pulse">
@@ -74,8 +108,25 @@ export function VideoPlayer() {
     );
   }
 
+  const isOwner = user?.uid === video.authorId;
+
   return (
     <div className="max-w-[1600px] mx-auto px-4 py-8">
+      {/* Share Notification */}
+      <AnimatePresence>
+        {showShareNotification && (
+          <motion.div
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+            className="fixed top-8 left-1/2 -translate-x-1/2 z-[70] bg-neon-blue text-white px-6 py-3 rounded-2xl font-black uppercase tracking-tighter shadow-[0_0_30px_rgba(59,130,246,0.3)] flex items-center gap-3"
+          >
+            <Check className="w-5 h-5" />
+            Link skopiowany do schowka!
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         {/* Main Player Column */}
         <div className="lg:col-span-8">
@@ -130,17 +181,58 @@ export function VideoPlayer() {
                     <Heart className="w-5 h-5 text-red-500 fill-red-500" />
                     <span>{video.likes}</span>
                   </button>
-                  <button className="px-4 py-3 hover:bg-gray-800 transition-colors">
+                  <button 
+                    onClick={handleShare}
+                    className="px-4 py-3 hover:bg-gray-800 transition-colors"
+                    title="Udostępnij"
+                  >
                     <Share2 className="w-5 h-5 text-gray-400" />
                   </button>
                 </div>
-                <button className="bg-surface border border-gray-800 p-3 rounded-2xl hover:bg-gray-800 transition-colors">
-                   <MoreHorizontal className="w-5 h-5 text-gray-400" />
-                </button>
+                
+                <div className="relative" ref={menuRef}>
+                  <button 
+                    onClick={() => setShowMenu(!showMenu)}
+                    className="bg-surface border border-gray-800 p-3 rounded-2xl hover:bg-gray-800 transition-colors"
+                  >
+                    <MoreHorizontal className="w-5 h-5 text-gray-400" />
+                  </button>
+
+                  <AnimatePresence>
+                    {showMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        className="absolute right-0 mt-2 w-48 bg-surface border border-gray-800 rounded-2xl shadow-2xl overflow-hidden z-50"
+                      >
+                        {isOwner && (
+                          <button
+                            onClick={() => {
+                              setIsEditModalOpen(true);
+                              setShowMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-blue-500 hover:bg-gray-800 transition-colors"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                            Edytuj Film
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setShowMenu(false)}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-400 hover:bg-gray-800 transition-colors"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          Udostępnij
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
 
-            <div className="mt-8 p-6 bg-surface border border-gray-800 rounded-3xl">
+            <div className="mt-8 p-6 bg-surface border border-gray-800 rounded-3xl mb-12">
               <div className="flex items-center gap-6 font-mono text-[11px] text-gray-400 uppercase tracking-widest mb-4">
                 <span className="flex items-center gap-2 font-bold text-white">
                   <Eye className="w-3 h-3 text-red-500" /> {video.views.toLocaleString()} wyświetleń
@@ -152,6 +244,19 @@ export function VideoPlayer() {
               <p className="text-gray-300 leading-relaxed whitespace-pre-wrap font-medium">
                 {video.description || 'Brak opisu dla tej transmisji.'}
               </p>
+            </div>
+
+            {/* Comments Section */}
+            <div className="mt-12">
+              <div className="flex items-center gap-3 mb-8">
+                <MessageSquare className="w-6 h-6 text-red-500" />
+                <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
+                  Komentarze <span className="text-gray-600 ml-2 font-mono text-lg">({video.commentsCount || 0})</span>
+                </h2>
+              </div>
+              <div className="bg-surface border border-gray-800 rounded-[2.5rem] p-8">
+                <CommentSection targetId={video.id} targetType="video" authorId={video.authorId} />
+              </div>
             </div>
           </div>
         </div>
@@ -200,6 +305,12 @@ export function VideoPlayer() {
           </div>
         </div>
       </div>
+
+      <VideoEditModal 
+        isOpen={isEditModalOpen} 
+        onClose={() => setIsEditModalOpen(false)} 
+        video={video} 
+      />
     </div>
   );
 }

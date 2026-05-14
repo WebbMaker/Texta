@@ -12,11 +12,12 @@ import { createNotification } from '../lib/actions';
 import { CommentItem } from './CommentItem';
 
 interface CommentSectionProps {
-  postId: string;
-  postAuthorId: string;
+  targetId: string;
+  targetType: 'post' | 'video';
+  authorId: string;
 }
 
-export function CommentSection({ postId, postAuthorId }: CommentSectionProps) {
+export function CommentSection({ targetId, targetType, authorId }: CommentSectionProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
@@ -28,7 +29,7 @@ export function CommentSection({ postId, postAuthorId }: CommentSectionProps) {
     const commentsRef = collection(db, 'comments');
     const q = query(
       commentsRef, 
-      where('postId', '==', postId),
+      where('postId', '==', targetId),
       orderBy('createdAt', 'asc')
     );
     
@@ -42,7 +43,7 @@ export function CommentSection({ postId, postAuthorId }: CommentSectionProps) {
     });
 
     return () => unsubscribe();
-  }, [postId]);
+  }, [targetId]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -54,7 +55,7 @@ export function CommentSection({ postId, postAuthorId }: CommentSectionProps) {
       
       const newCommentRef = doc(collection(db, 'comments'));
       const commentData: any = {
-        postId,
+        postId: targetId,
         authorId: user.uid,
         authorUsername: profile.username,
         content: newComment.trim(),
@@ -66,16 +67,16 @@ export function CommentSection({ postId, postAuthorId }: CommentSectionProps) {
       }
       batch.set(newCommentRef, commentData);
 
-      const postRef = doc(db, 'posts', postId);
-      batch.update(postRef, { commentsCount: increment(1) });
+      const targetRef = doc(db, targetType === 'post' ? 'posts' : 'videos', targetId);
+      batch.update(targetRef, { commentsCount: increment(1) });
 
       await batch.commit();
       
-      if (postAuthorId !== user.uid) {
-        createNotification(postAuthorId, {
+      if (authorId !== user.uid) {
+        createNotification(authorId, {
           type: 'comment',
-          content: `${profile.username} skomentował(a) twój post.`,
-          relatedId: postId
+          content: `${profile.username} skomentował(a) twoją ${targetType === 'post' ? 'treść' : 'transmisję'}.`,
+          relatedId: targetId
         });
       }
 
@@ -117,9 +118,11 @@ export function CommentSection({ postId, postAuthorId }: CommentSectionProps) {
             </div>
           )}
           <div className="flex gap-4">
-            <div className="flex items-center justify-center">
-              <ImageUploadButton onImageSelected={setImageUrl} />
-            </div>
+            {profile && targetType === 'post' && (
+              <div className="flex items-center justify-center">
+                <ImageUploadButton onImageSelected={setImageUrl} />
+              </div>
+            )}
             <input
               type="text"
               value={newComment}

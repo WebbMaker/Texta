@@ -73,4 +73,5 @@ export interface Video {
   views: number;
   createdAt: number;
   likes: number;
+  commentsCount?: number;
 }

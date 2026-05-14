@@ -102,15 +102,15 @@ export function PostCard({ post }: PostCardProps) {
           <MarkdownContent content={post.content} className="mb-6" />
 
           {post.imageUrl && (
-            <div className="mb-6 group relative flex justify-start">
+            <div className="mb-6 group relative">
               <div 
                 onClick={() => setIsFullscreen(true)}
-                className="rounded-xl overflow-hidden border border-gray-800 bg-black/50 cursor-zoom-in transition-all hover:border-neon-blue relative"
+                className="max-w-[45%] rounded-xl overflow-hidden border border-gray-800 bg-black/50 cursor-zoom-in transition-all hover:border-neon-blue relative inline-block"
               >
                 <img 
-                  src={post.imageUrl} 
-                  alt="post content" 
-                  className="max-w-full h-auto max-h-[70vh] object-contain rounded-lg block" 
+                   src={post.imageUrl} 
+                   alt="post content" 
+                   className="w-full h-auto max-h-[400px] object-contain rounded-lg block" 
                 />
                 <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
                   <Maximize2 className="w-4 h-4 text-white" />
@@ -142,7 +142,7 @@ export function PostCard({ post }: PostCardProps) {
 
       {showComments && (
         <div className="mt-6 pt-6 border-t border-gray-800">
-           <CommentSection postId={post.id} postAuthorId={post.authorId} />
+           <CommentSection targetId={post.id} targetType="post" authorId={post.authorId} />
         </div>
       )}
 
