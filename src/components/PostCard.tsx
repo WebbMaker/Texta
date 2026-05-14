@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Post, Vote } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
-import { Heart, MessageSquare, Trash2 } from 'lucide-react';
+import { Heart, MessageSquare, Trash2, X, Maximize2 } from 'lucide-react';
 import { Link } from 'react-router';
 import { toggleVote, createNotification } from '../lib/actions';
 import { db } from '../lib/firebase';
@@ -10,6 +10,7 @@ import { doc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { UserAvatar } from './UserAvatar';
 import { CommentSection } from './CommentSection';
 import { MarkdownContent } from './MarkdownContent';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface PostCardProps {
   key?: string | number;
@@ -21,6 +22,7 @@ export function PostCard({ post }: PostCardProps) {
   const [userVote, setUserVote] = useState<'upvote' | 'downvote' | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [isVoting, setIsVoting] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const likes = post.upvoteCount;
 
@@ -100,8 +102,20 @@ export function PostCard({ post }: PostCardProps) {
           <MarkdownContent content={post.content} className="mb-6" />
 
           {post.imageUrl && (
-            <div className="mb-6 rounded-xl overflow-hidden border border-gray-800 flex justify-center bg-black/50 p-2">
-              <img src={post.imageUrl} alt="img" className="max-h-96 object-contain rounded-lg" />
+            <div className="mb-6 group relative flex justify-start">
+              <div 
+                onClick={() => setIsFullscreen(true)}
+                className="rounded-xl overflow-hidden border border-gray-800 bg-black/50 cursor-zoom-in transition-all hover:border-neon-blue relative"
+              >
+                <img 
+                  src={post.imageUrl} 
+                  alt="post content" 
+                  className="max-w-full h-auto max-h-[70vh] object-contain rounded-lg block" 
+                />
+                <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Maximize2 className="w-4 h-4 text-white" />
+                </div>
+              </div>
             </div>
           )}
 
@@ -131,6 +145,41 @@ export function PostCard({ post }: PostCardProps) {
            <CommentSection postId={post.id} postAuthorId={post.authorId} />
         </div>
       )}
+
+      {/* Fullscreen Image Portal */}
+      <AnimatePresence>
+        {isFullscreen && post.imageUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl"
+            onClick={() => setIsFullscreen(false)}
+          >
+            <motion.button
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-[101]"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsFullscreen(false);
+              }}
+            >
+              <X className="w-6 h-6" />
+            </motion.button>
+            <motion.img
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              src={post.imageUrl}
+              alt="fullscreen"
+              className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

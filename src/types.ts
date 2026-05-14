@@ -61,3 +61,16 @@ export interface Vote {
   id: string; // voteUserId
   type: 'upvote' | 'downvote';
 }
+
+export interface Video {
+  id: string;
+  authorId: string;
+  authorUsername: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  videoUrl: string;
+  views: number;
+  createdAt: number;
+  likes: number;
+}

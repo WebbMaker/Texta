@@ -81,6 +81,10 @@ export function Layout() {
           </form>
 
           <nav className="flex items-center gap-4 sm:gap-6 flex-shrink-0">
+            <Link to="/videos" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors flex items-center gap-2">
+              <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span>
+              Filmy
+            </Link>
             <Link to="/about" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors hidden sm:block">
               O nas
             </Link>
@@ -150,8 +154,10 @@ export function Layout() {
         mode={authModal.mode} 
       />
 
-      <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
-        <Outlet />
+      <main className="flex-1 w-full mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

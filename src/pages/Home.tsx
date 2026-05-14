@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, orderBy, limit, getDocs, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { Post } from '../types';
 import { PostComposer } from '../components/PostComposer';
 import { PostCard } from '../components/PostCard';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthModal } from '../components/AuthModal';
-import { Terminal, Globe, Zap } from 'lucide-react';
+import { Terminal, Globe, Zap, Youtube, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router';
 
 const POSTS_PER_PAGE = 15;
 
@@ -15,7 +16,7 @@ export function Home() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [sortParam, setSortParam] = useState<'createdAt' | 'upvoteCount'>('createdAt');
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [limitCount, setLimitCount] = useState(POSTS_PER_PAGE);
   const [hasMore, setHasMore] = useState(true);
   const [authModal, setAuthModal] = useState<{ open: boolean, mode: 'login' | 'register' }>({ open: false, mode: 'login' });
   const { profile, user } = useAuth();
@@ -27,72 +28,45 @@ export function Home() {
     
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore) {
-        loadMorePosts();
+        setLimitCount(prev => prev + POSTS_PER_PAGE);
       }
     });
     
     if (node) observer.current.observe(node);
   }, [loading, loadingMore, hasMore]);
 
-  const fetchInitialPosts = async () => {
+  useEffect(() => {
     setLoading(true);
-    setHasMore(true);
-    try {
-      const postsRef = collection(db, 'posts');
-      const q = query(postsRef, orderBy(sortParam, 'desc'), limit(POSTS_PER_PAGE));
-      const snapshot = await getDocs(q);
-      
+    const postsRef = collection(db, 'posts');
+    const q = query(postsRef, orderBy(sortParam, 'desc'), limit(limitCount));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const newPosts: Post[] = [];
       snapshot.forEach((doc) => {
         newPosts.push({ id: doc.id, ...doc.data() } as Post);
       });
       
       setPosts(newPosts);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      if (snapshot.docs.length < POSTS_PER_PAGE) {
-        setHasMore(false);
-      }
-    } catch (error) {
-      console.error("Error fetching posts:", error);
-    } finally {
       setLoading(false);
-    }
-  };
-
-  const loadMorePosts = async () => {
-    if (!lastDoc || loadingMore) return;
-    
-    setLoadingMore(true);
-    try {
-      const postsRef = collection(db, 'posts');
-      const q = query(
-        postsRef, 
-        orderBy(sortParam, 'desc'), 
-        startAfter(lastDoc), 
-        limit(POSTS_PER_PAGE)
-      );
-      
-      const snapshot = await getDocs(q);
-      const newPosts: Post[] = [];
-      snapshot.forEach((doc) => {
-        newPosts.push({ id: doc.id, ...doc.data() } as Post);
-      });
-      
-      setPosts(prev => [...prev, ...newPosts]);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      
-      if (snapshot.docs.length < POSTS_PER_PAGE) {
-        setHasMore(false);
-      }
-    } catch (error) {
-      console.error("Error loading more posts:", error);
-    } finally {
       setLoadingMore(false);
-    }
-  };
+      
+      if (snapshot.docs.length < limitCount) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+    }, (error) => {
+      console.error("Error with posts snapshot:", error);
+      setLoading(false);
+      setLoadingMore(false);
+    });
+
+    return () => unsubscribe();
+  }, [sortParam, limitCount]);
 
   useEffect(() => {
-    fetchInitialPosts();
+    // Reset limit when switching sort
+    setLimitCount(POSTS_PER_PAGE);
   }, [sortParam]);
 
   return (
@@ -145,6 +119,17 @@ export function Home() {
           <PostComposer />
         </div>
       )}
+
+      <div className="flex flex-col sm:flex-row items-center gap-4 mb-8">
+        <Link 
+          to="/videos"
+          className="flex-1 sm:flex-none group flex items-center justify-center gap-3 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(220,38,38,0.2)] hover:shadow-[0_0_30px_rgba(220,38,38,0.4)]"
+        >
+          <Youtube className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          Obejrzyj Filmy
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      </div>
 
       <AuthModal 
         isOpen={authModal.open} 

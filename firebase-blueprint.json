@@ -80,6 +80,10 @@
       "schema": { "$ref": "comment" },
       "description": "Stores comments linked to posts"
     },
+    "videos/{videoId}": {
+      "schema": "object",
+      "description": "YouTube-style video library"
+    },
     "private_messages/{messageId}": {
       "schema": "object",
       "description": "Private messages between users"

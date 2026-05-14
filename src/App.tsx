@@ -10,6 +10,8 @@ import { Profile } from './pages/Profile';
 import { Messages } from './pages/Messages';
 import { About } from './pages/About';
 import { Notifications } from './pages/Notifications';
+import { Videos } from './pages/Videos';
+import { VideoPlayer } from './pages/VideoPlayer';
 
 export default function App() {
   return (
@@ -18,6 +20,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
+            <Route path="videos" element={<Videos />} />
+            <Route path="watch/:id" element={<VideoPlayer />} />
             <Route path="u/:username" element={<Profile />} />
             <Route path="messages" element={<Messages />} />
             <Route path="about" element={<About />} />
