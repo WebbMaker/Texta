@@ -1,241 +1,325 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, writeBatch, getDocFromServer } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { Link } from 'react-router';
-import { Send, Check, X, CheckCheck } from 'lucide-react';
+import { Send, Check, X, CheckCheck, Users, Search, Target, Pencil, MoreVertical } from 'lucide-react';
 import { ImageUploadButton } from '../components/ImageUploadButton';
 import { UserAvatar } from '../components/UserAvatar';
 import { UserPresence } from '../components/UserPresence';
 import { MarkdownContent } from '../components/MarkdownContent';
-import { Message, TypingStatus } from '../types';
-import { auth } from '../lib/firebase';
+import { Conversation, ConversationMessage } from '../types';
+import { CreateGroupModal } from '../components/chat/CreateGroupModal';
+import { ChatSettings } from '../components/chat/ChatSettings';
 
-interface Friend {
-  uid: string;
-  username: string;
-  addedAt: number;
-  unreadCount?: number;
-}
-
-interface FriendRequest {
-  uid: string;
-  username: string;
-  createdAt: number;
-}
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
+const MESSENGER_DOTS_ANIMATION = `
+  @keyframes typing {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
   }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+`;
 
 export function Messages() {
   const { user, profile } = useAuth();
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [requests, setRequests] = useState<FriendRequest[]>([]);
-  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [otherIsTyping, setOtherIsTyping] = useState(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const unreadListenersRef = useRef<{ [key: string]: () => void }>({});
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{uid: string, username: string, avatarUrl?: string}[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  const [typings, setTypings] = useState<Record<string, boolean>>({});
+  const [friendsInfo, setFriendsInfo] = useState<Record<string, {username: string, avatarUrl?: string}>>({});
+  const [friends, setFriends] = useState<string[]>([]);
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load friends
   useEffect(() => {
     if (!user) return;
     const unsub = onSnapshot(collection(db, 'users', user.uid, 'friends'), (snap) => {
-      const f: Friend[] = [];
-      snap.forEach(d => f.push({ uid: d.id, ...d.data() } as Friend));
-      
-      // Clean up old unread listeners
-      Object.values(unreadListenersRef.current).forEach(unsub => unsub());
-      unreadListenersRef.current = {};
-
-      // Listen for unread messages for each friend
-      f.forEach((friend) => {
-        const q = query(
-          collection(db, 'private_messages'),
-          where('participants', 'array-contains', user.uid),
-          where('senderId', '==', friend.uid),
-          where('seen', '==', false)
-        );
-        unreadListenersRef.current[friend.uid] = onSnapshot(q, (unreadSnap) => {
-          setFriends(prev => {
-            const newFriends = [...prev];
-            const found = newFriends.find(nf => nf.uid === friend.uid);
-            if (found) {
-              found.unreadCount = unreadSnap.docs.length;
-            }
-            return newFriends;
-          });
-        }, (err) => {
-          handleFirestoreError(err, OperationType.LIST, 'private_messages/unread');
-        });
-      });
-
-      setFriends(f);
-    }, (err) => {
-       handleFirestoreError(err, OperationType.LIST, `users/${user.uid}/friends`);
-    });
-
-    return () => {
-      unsub();
-      Object.values(unreadListenersRef.current).forEach(unsub => unsub());
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    const unsub = onSnapshot(collection(db, 'users', user.uid, 'friend_requests'), (snap) => {
-      const reqs: FriendRequest[] = [];
-      snap.forEach(d => reqs.push({ uid: d.id, ...d.data() } as FriendRequest));
-      setRequests(reqs);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, `users/${user.uid}/friend_requests`);
+      setFriends(snap.docs.map(d => d.id));
     });
     return () => unsub();
   }, [user]);
 
+  // Search users effect
   useEffect(() => {
-    if (!user || !selectedFriend) return;
-    
-    // Mark messages as seen when chat opens
-    const qMarkSeen = query(
-      collection(db, 'private_messages'),
-      where('participants', 'array-contains', user.uid),
-      where('senderId', '==', selectedFriend.uid),
-      where('seen', '==', false)
-    );
+    if (!searchQuery.trim() || !user) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      const qText = searchQuery.trim().toLowerCase();
+      
+      const nameSynonyms: Record<string, string[]> = {
+        'ola': ['aleksandra'],
+        'aleksandra': ['ola', 'oluś'],
+        'kasia': ['katarzyna'],
+        'katarzyna': ['kasia'],
+        'tomek': ['tomasz'],
+        'tomasz': ['tomek'],
+        'maciek': ['maciej'],
+        'maciej': ['maciek'],
+        'ania': ['anna'],
+        'anna': ['ania'],
+        'magda': ['magdalena'],
+        'magdalena': ['magda'],
+        'michał': ['misiek', 'michal'],
+        'michal': ['michał', 'misiek']
+      };
 
-    const unsubSeen = onSnapshot(qMarkSeen, (snap) => {
-      if (snap.empty) return;
-      const batch = writeBatch(db);
-      snap.docs.forEach(d => {
-        batch.update(d.ref, { seen: true });
-      });
-      batch.commit().catch(err => handleFirestoreError(err, OperationType.UPDATE, 'private_messages/seen'));
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'private_messages/mark_seen_query');
-    });
-
-    // Listen for other person's typing status
-    const typingDocId = [user.uid, selectedFriend.uid].sort().join('_');
-    const unsubTyping = onSnapshot(doc(db, 'typing_status', typingDocId), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const isRecent = Date.now() - (data.lastActive || 0) < 5000;
-        setOtherIsTyping(!!data[selectedFriend.uid] && isRecent);
-      } else {
-        setOtherIsTyping(false);
-      }
-    }, (err) => {
-      handleFirestoreError(err, OperationType.GET, `typing_status/${typingDocId}`);
-    });
-
-    const unsubMessages = onSnapshot(query(collection(db, 'private_messages'), where('participants', 'array-contains', user.uid)), (snap) => {
-      const msgs: Message[] = [];
-      snap.forEach(d => {
-        const data = d.data() as Message;
-        if (data.participants.includes(selectedFriend.uid)) {
-          msgs.push({ id: d.id, ...data });
+      const levenshtein = (a: string, b: string) => {
+        if (a.length === 0) return b.length;
+        if (b.length === 0) return a.length;
+        const matrix = [];
+        for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
+        for (let i = 0; i <= a.length; i++) { matrix[0][i] = i; }
+        for (let i = 1; i <= b.length; i++) {
+          for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+              matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+              matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+            }
+          }
         }
+        return matrix[b.length][a.length];
+      };
+
+      try {
+        const { getDocs, query, collection, limit } = await import('firebase/firestore');
+        const snap = await getDocs(query(collection(db, 'users'), limit(300)));
+        const users = snap.docs.map(d => ({uid: d.id, ...(d.data() as any)})).filter(u => u.uid !== user.uid);
+        
+        const qSynonyms = [qText, ...(nameSynonyms[qText] || [])];
+        
+        let results = users.map(u => {
+          let minDistance = Infinity;
+          const uName = u.username.toLowerCase();
+          
+          if (qSynonyms.some(s => uName.includes(s))) {
+             minDistance = 0;
+          } else {
+             const dist = levenshtein(uName, qText);
+             minDistance = dist;
+             
+             // Also check distances against synonyms
+             for (const syn of qSynonyms) {
+               minDistance = Math.min(minDistance, levenshtein(uName, syn));
+             }
+          }
+          return { ...u, distance: minDistance };
+        });
+
+        // Margines błędu: dystans max 2 (dla literówek) lub substring
+        results = results.filter(r => r.distance <= Math.max(2, Math.floor(qText.length / 3)) || qSynonyms.some(s => r.username.toLowerCase().includes(s)));
+        results.sort((a,b) => a.distance - b.distance);
+        setSearchResults(results.slice(0, 10));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery, user]);
+
+  const handleStartChat = async (targetUserId: string) => {
+     setSearchQuery('');
+     setSearchResults([]);
+     
+     if (!friends.includes(targetUserId)) {
+       alert('Musisz mieć tę osobę w znajomych, aby rozpocząć czat. Wejdź na jej profil, aby wysłać zaproszenie.');
+       return;
+     }
+
+     const existing = conversations.find(c => c.type === 'direct' && c.participants.includes(targetUserId));
+     if (existing) {
+        setActiveConvId(existing.id);
+        return;
+     }
+     try {
+       const newRef = await addDoc(collection(db, 'conversations'), {
+         type: 'direct',
+         participants: [user!.uid, targetUserId].sort(),
+         nicknames: {},
+         createdAt: Date.now(),
+         updatedAt: Date.now()
+       });
+       setActiveConvId(newRef.id);
+     } catch (e) {
+       console.error(e);
+     }
+  };
+
+  // Load conversations
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'conversations'),
+      where('participants', 'array-contains', user.uid)
+    );
+    const unsub = onSnapshot(q, async (snap) => {
+      const convs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Conversation));
+      convs.sort((a, b) => b.updatedAt - a.updatedAt);
+      setConversations(convs);
+      
+      // Fetch missing user info for participants
+      const missingUids = new Set<string>();
+      convs.forEach(c => {
+         c.participants.forEach(p => {
+           if (p !== user.uid && !friendsInfo[p]) missingUids.add(p);
+         });
       });
-      msgs.sort((a, b) => a.createdAt - b.createdAt);
+      
+      if (missingUids.size > 0) {
+         missingUids.forEach(async (uid) => {
+           try {
+             const userDoc = await getDoc(doc(db, 'users', uid));
+             if (userDoc.exists()) {
+               setFriendsInfo(prev => ({
+                 ...prev,
+                 [uid]: { username: userDoc.data().username, avatarUrl: userDoc.data().avatarUrl }
+               }));
+             }
+           } catch(e) {}
+         });
+      }
+      
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [user]);
+
+  // Load active conversation messages
+  useEffect(() => {
+    if (!user || !activeConvId) return;
+    
+    const q = query(
+      collection(db, 'conversations', activeConvId, 'messages'),
+      orderBy('createdAt', 'asc')
+    );
+    
+    const unsub = onSnapshot(q, (snap) => {
+      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ConversationMessage));
       setMessages(msgs);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'private_messages');
+      
+      // Mark as seen
+      const unseen = snap.docs.filter(d => {
+        const m = d.data() as ConversationMessage;
+        return m.senderId !== user.uid && !m.seenBy.includes(user.uid);
+      });
+      if (unseen.length > 0) {
+        const batch = writeBatch(db);
+        unseen.forEach(d => {
+          batch.update(d.ref, { seenBy: [...d.data().seenBy, user.uid] });
+        });
+        batch.commit();
+      }
     });
 
-    return () => {
-      unsubSeen();
-      unsubTyping();
-      unsubMessages();
-    };
-  }, [user, selectedFriend]);
+    // Typing status listener
+    const unsubTyping = onSnapshot(doc(db, 'typing_status', activeConvId), (docSnap) => {
+       if (docSnap.exists()) {
+         const data = docSnap.data();
+         const isRecent = Date.now() - (data.lastActive || 0) < 5000;
+         const typingInfo: Record<string, boolean> = {};
+         Object.keys(data).forEach(k => {
+            if (k !== 'lastActive' && k !== user.uid) {
+               typingInfo[k] = !!data[k] && isRecent;
+            }
+         });
+         setTypings(typingInfo);
+       } else {
+         setTypings({});
+       }
+    });
+
+    return () => { unsub(); unsubTyping(); };
+  }, [user, activeConvId]);
+
+  const visibleConversations = conversations.filter(c => {
+    if (c.type === 'group') return true;
+    const friendId = c.participants.find(p => p !== user?.uid);
+    if (!friendId) return false;
+    return friends.includes(friendId);
+  });
+
+  const activeConv = visibleConversations.find(c => c.id === activeConvId);
+
+  const getConvName = (conv: Conversation) => {
+    if (conv.type === 'group') return conv.name || 'Grupa';
+    const friendId = conv.participants.find(p => p !== user?.uid);
+    if (!friendId) return 'Tylko ty';
+    if (conv.nicknames && conv.nicknames[friendId]) return conv.nicknames[friendId];
+    return friendsInfo[friendId]?.username || 'Ładowanie...';
+  };
+
+  const getConvAvatar = (conv: Conversation) => {
+    if (conv.type === 'group') {
+      if (conv.photoUrl) {
+         return <img src={conv.photoUrl} alt="Group avatar" className="w-12 h-12 rounded-full shadow-lg object-cover shrink-0" />;
+      }
+      return (
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#007aff] to-[#5856d6] flex items-center justify-center shrink-0 shadow-lg">
+          <Users className="w-6 h-6 text-white" />
+        </div>
+      );
+    }
+    const friendId = conv.participants.find(p => p !== user?.uid);
+    if (!friendId) return <div className="w-12 h-12 rounded-full bg-gray-800 shrink-0" />;
+    return <UserAvatar userId={friendId} username={friendsInfo[friendId]?.username || ''} className="w-12 h-12 shrink-0" />;
+  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !selectedFriend || (!newMessage.trim() && !imageUrl)) return;
+    if (!user || !activeConvId || (!newMessage.trim() && !imageUrl)) return;
     
-    const messageToSend = newMessage.trim();
-    const imageToSend = imageUrl;
-
-    // Clear input immediately for instant feedback
+    const msgText = newMessage.trim();
+    const curImg = imageUrl;
+    
     setNewMessage('');
     setImageUrl(null);
     handleTyping(false);
-    
-    const participants = [user.uid, selectedFriend.uid].sort();
+
     try {
-      const msg: any = {
-        participants,
+      const msgData: any = {
         senderId: user.uid,
-        content: messageToSend,
+        content: msgText,
         createdAt: Date.now(),
-        seen: false
+        seenBy: [user.uid]
       };
-      if (imageToSend) {
-         msg.imageUrl = imageToSend;
-      }
-      await addDoc(collection(db, 'private_messages'), msg);
-    } catch(err) {
+      if (curImg) msgData.imageUrl = curImg;
+      
+      await addDoc(collection(db, 'conversations', activeConvId, 'messages'), msgData);
+      
+      // Update last message
+      await updateDoc(doc(db, 'conversations', activeConvId), {
+        updatedAt: Date.now(),
+        lastMessage: {
+          text: msgText || (curImg ? 'Przesłano obraz' : ''),
+          senderId: user.uid,
+          createdAt: Date.now()
+        }
+      });
+    } catch (err) {
       console.error(err);
-      // Restore message if error occurs so user doesn't lose it
-      setNewMessage(messageToSend);
-      setImageUrl(imageToSend);
     }
-  }
+  };
 
   const handleTyping = (isTyping: boolean) => {
-    if (!user || !selectedFriend) return;
-    const typingDocId = [user.uid, selectedFriend.uid].sort().join('_');
-    const typingRef = doc(db, 'typing_status', typingDocId);
-    
-    setDoc(typingRef, {
+    if (!user || !activeConvId) return;
+    setDoc(doc(db, 'typing_status', activeConvId), {
       [user.uid]: isTyping,
       lastActive: Date.now()
     }, { merge: true }).catch(console.error);
@@ -244,204 +328,270 @@ export function Messages() {
   const onInputChange = (val: string) => {
     setNewMessage(val);
     handleTyping(true);
-    
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      handleTyping(false);
-    }, 3000);
+    typingTimeoutRef.current = setTimeout(() => handleTyping(false), 3000);
   };
 
-  const handleAcceptRequest = async (req: FriendRequest) => {
-    if (!user || !profile) return;
-    try {
-      // Add to my friends
-      await setDoc(doc(db, 'users', user.uid, 'friends', req.uid), {
-        username: req.username,
-        addedAt: Date.now()
-      });
-      // Add me to their friends
-      await setDoc(doc(db, 'users', req.uid, 'friends', user.uid), {
-        username: profile.username,
-        addedAt: Date.now()
-      });
-      // Delete request
-      await deleteDoc(doc(db, 'users', user.uid, 'friend_requests', req.uid));
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const activeTypingUsers = Object.keys(typings).filter(uid => typings[uid]);
 
-  const handleDeclineRequest = async (reqUid: string) => {
-    if (!user) return;
-    try {
-      await deleteDoc(doc(db, 'users', user.uid, 'friend_requests', reqUid));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  if (!user) {
-    return <div className="text-center text-gray-500 font-sans py-12">Zaloguj się, aby rozmawiać</div>;
-  }
+  if (!user) return <div className="text-center py-12">Zaloguj się...</div>;
 
   return (
-    <div className="flex flex-col sm:flex-row gap-6 h-[70vh]">
-      {/* Friends List and Requests */}
-      <div className="w-full sm:w-1/3 flex flex-col gap-4 overflow-hidden">
-        {requests.length > 0 && (
-          <div className="bg-surface border border-gray-800 rounded-2xl p-4 shrink-0">
-            <h2 className="text-sm font-bold text-neon-blue tracking-widest uppercase font-mono pb-2 mb-4 border-b border-gray-800">
-              ZAPROSZENIA ({requests.length})
-            </h2>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {requests.map(req => (
-                <div key={req.uid} className="flex flex-col gap-2 p-3 bg-bg-dark rounded-xl border border-gray-800">
-                  <div className="flex items-center gap-2">
-                    <UserAvatar userId={req.uid} username={req.username} className="w-6 h-6" fallbackClassName="bg-gray-700 text-[10px]" />
-                    <span className="font-bold text-white text-sm">@{req.username}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleAcceptRequest(req)} className="flex-1 bg-neon-purple text-white text-xs font-bold py-1.5 rounded uppercase hover:brightness-110 flex items-center justify-center gap-1">
-                      <Check className="w-3 h-3" /> Akceptuj
-                    </button>
-                    <button onClick={() => handleDeclineRequest(req.uid)} className="flex-1 bg-gray-800 text-gray-400 text-xs font-bold py-1.5 rounded uppercase hover:text-white hover:bg-gray-700 flex items-center justify-center gap-1">
-                      <X className="w-3 h-3" /> Odrzuć
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="bg-surface border border-gray-800 rounded-2xl p-4 flex-1 overflow-y-auto shadow-[0_0_20px_rgba(0,0,0,0.3)]">
-          <h2 className="text-sm font-bold text-text-dim tracking-widest uppercase font-sans pb-2 mb-4 border-b border-gray-800">
-            Znajomi
-          </h2>
-          {friends.length === 0 ? (
-            <p className="text-xs text-gray-500 font-mono">Nie znaleziono połączonych węzłów. Wyszukaj użytkowników, aby ich dodać.</p>
-          ) : (
-            friends.map(f => (
-              <button
-                key={f.uid}
-                onClick={() => setSelectedFriend(f)}
-                className={`w-full text-left px-4 py-3 rounded-xl mb-2 transition-colors flex items-center gap-3 ${selectedFriend?.uid === f.uid ? 'bg-gray-800 border border-neon-blue' : 'hover:bg-gray-900 border border-transparent'}`}
-              >
-                <UserAvatar userId={f.uid} username={f.username} className="w-10 h-10 flex-shrink-0" />
-                <div className="flex-1 overflow-hidden">
+    <div className="flex h-[80vh] bg-black border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+      <style>{MESSENGER_DOTS_ANIMATION}</style>
+      {showCreateGroup && <CreateGroupModal onClose={() => setShowCreateGroup(false)} onGroupCreated={(id) => { setActiveConvId(id); setShowCreateGroup(false); }} />}
+      
+      {/* Sidebar */}
+      <div className="w-[350px] border-r border-white/10 flex flex-col bg-zinc-950/50 backdrop-blur-xl">
+        {/* User Search */}
+        <div className="p-3 border-b border-white/5 bg-black/40">
+           <div className="relative">
+             <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+             <input
+               type="text"
+               placeholder="Szukaj osób..."
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               className="w-full bg-zinc-900 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-[#007aff]/50 focus:bg-zinc-800 transition-colors"
+             />
+           </div>
+           {searchQuery.trim() && (
+             <div className="max-h-[200px] overflow-y-auto mt-2 bg-zinc-900 border border-white/10 rounded-xl overflow-hidden shadow-2xl absolute w-[334px] z-50 left-2 top-[60px]">
+               {isSearching ? (
+                  <div className="p-3 text-center text-xs text-gray-500">Szukanie...</div>
+               ) : searchResults.length > 0 ? (
                   <div className="flex flex-col">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-white truncate">{f.username}</span>
-                      {f.unreadCount && f.unreadCount > 0 ? (
-                        <span className="bg-neon-blue text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ml-2">
-                          {f.unreadCount}
-                        </span>
-                      ) : null}
-                    </div>
-                    <UserPresence userId={f.uid} />
+                    {searchResults.map(res => (
+                       <button
+                         key={res.uid}
+                         onClick={() => handleStartChat(res.uid)}
+                         className="flex items-center gap-3 p-2 hover:bg-white/5 text-left border-b border-white/5 last:border-0"
+                       >
+                         <UserAvatar userId={res.uid} username={res.username} className="w-8 h-8 rounded-full shadow-sm" />
+                         <span className="font-semibold text-sm truncate">{res.username}</span>
+                       </button>
+                    ))}
                   </div>
+               ) : (
+                  <div className="p-3 text-center text-xs text-gray-500">Brak wyników</div>
+               )}
+             </div>
+           )}
+        </div>
+
+        <div className="p-4 border-b border-white/5 flex items-center justify-between">
+          <h1 className="text-xl font-bold font-display">Czaty</h1>
+          <button onClick={() => setShowCreateGroup(true)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors" title="Nowa grupa">
+            <Pencil className="w-5 h-5 text-white/80" />
+          </button>
+        </div>
+        
+        {/* Recent users bubbles */}
+        <div className="p-4 border-b border-white/5 overflow-x-auto whitespace-nowrap scrollbar-hide flex gap-4">
+           {visibleConversations.map(c => {
+             return (
+               <div key={c.id} onClick={() => setActiveConvId(c.id)} className="cursor-pointer inline-flex flex-col items-center gap-1 w-16 group">
+                 <div className="relative group-hover:-translate-y-1 transition-transform">
+                   {getConvAvatar(c)}
+                   {c.type === 'direct' && c.participants.find(p=>p!==user.uid) && (
+                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black">
+                       <UserPresence userId={c.participants.find(p=>p!==user.uid)!} hideLabel />
+                     </div>
+                   )}
+                 </div>
+                 <span className="text-[10px] text-white/50 truncate w-full text-center">{getConvName(c).split(' ')[0]}</span>
+               </div>
+             )
+           })}
+        </div>
+
+        <div className="flex-1 overflow-y-auto w-full">
+          {visibleConversations.map(c => {
+            const isActive = activeConvId === c.id;
+            const friendId = c.type === 'direct' ? c.participants.find(p => p !== user.uid) : null;
+            const hasUnread = c.lastMessage && c.lastMessage.senderId !== user.uid && 
+                              messages.length>0 && !messages[messages.length-1].seenBy.includes(user.uid);
+            
+            return (
+              <button 
+                key={c.id} 
+                onClick={() => setActiveConvId(c.id)}
+                className={`w-full p-4 flex items-center gap-3 transition-colors text-left ${isActive ? 'bg-white/5' : 'hover:bg-white/[0.02]'}`}
+              >
+                <div className="relative shrink-0">
+                  {getConvAvatar(c)}
+                  {friendId && (
+                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black" style={{ transform: 'translate(10%, 10%)' }}>
+                       <UserPresence userId={friendId} hideLabel />
+                     </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <div className="flex justify-between items-baseline mb-1">
+                    <span className={`font-semibold truncate ${hasUnread ? 'text-white' : 'text-gray-200'}`}>
+                      {getConvName(c)}
+                    </span>
+                    {c.updatedAt && (
+                      <span className="text-[10px] text-gray-500 whitespace-nowrap ml-2 shrink-0">
+                        {new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </span>
+                    )}
+                  </div>
+                  {c.lastMessage && (
+                     <p className={`text-xs truncate ${hasUnread ? 'text-white font-bold' : 'text-gray-500'}`}>
+                        {c.lastMessage.senderId === user.uid ? 'Ty: ' : ''}{c.lastMessage.text}
+                     </p>
+                  )}
                 </div>
               </button>
-            ))
-          )}
+            )
+          })}
         </div>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 bg-surface border border-gray-800 rounded-2xl flex flex-col overflow-hidden relative shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-         <div className="absolute top-0 left-0 w-1 h-full bg-neon-blue"></div>
-         {selectedFriend ? (
-           <>
-             <div className="p-4 border-b border-gray-800 flex items-center justify-between bg-bg-dark/50">
-               <div className="flex items-center gap-3">
-                 <UserAvatar userId={selectedFriend.uid} username={selectedFriend.username} className="w-8 h-8" />
-                 <span className="font-bold">Czatujesz z <Link to={`/u/${selectedFriend.username}`} className="text-neon-blue hover:underline">@{selectedFriend.username}</Link></span>
-               </div>
-             </div>
-             
-             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-               {messages.length === 0 ? (
-                 <p className="text-center text-gray-500 font-sans text-sm mt-10">Brak historii wiadomości.</p>
-               ) : (
-                 messages.map((msg, index) => {
-                   const isMe = msg.senderId === user.uid;
-                   const isLast = index === messages.length - 1;
-                   return (
-                     <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                       <div className={`max-w-[70%] rounded-2xl px-4 py-2 ${isMe ? 'bg-neon-purple text-white rounded-br-none' : 'bg-gray-800 text-gray-200 rounded-bl-none'}`}>
-                         {msg.imageUrl && (
-                           <img src={msg.imageUrl} alt="attached" className="max-w-full rounded-lg mb-2 max-h-60 object-contain" />
-                         )}
-                         <MarkdownContent content={msg.content} mentionColor={isMe ? 'purple' : 'blue'} />
-                       </div>
-                       {isMe && isLast && (
-                         <div className="flex items-center gap-1 mt-1 px-1">
-                           {msg.seen ? (
-                             <>
-                               <span className="text-[10px] text-gray-500 font-mono uppercase">Wyświetlono</span>
-                               <CheckCheck className="w-3 h-3 text-neon-blue" />
-                             </>
-                           ) : (
-                             <>
-                               <span className="text-[10px] text-gray-500 font-mono uppercase">Dostarczono</span>
-                               <Check className="w-3 h-3 text-gray-600" />
-                             </>
-                           )}
-                         </div>
-                       )}
+      {/* Main Chat */}
+      <div className="flex-1 flex flex-col relative bg-zinc-950/80">
+        {activeConvId && activeConv ? (
+          <>
+            {/* Header */}
+            <div className="h-[73px] border-b border-white/10 px-6 flex items-center justify-between bg-black/40 backdrop-blur-md z-10 shrink-0">
+               <div className="flex items-center gap-4">
+                 {getConvAvatar(activeConv)}
+                 <div className="flex flex-col">
+                   <h2 className="font-bold text-lg leading-tight">{getConvName(activeConv)}</h2>
+                   {activeConv.type === 'direct' && (
+                     <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                       <UserPresence userId={activeConv.participants.find(p => p !== user.uid)!} />
                      </div>
-                   );
-                 })
-               )}
-               {otherIsTyping && (
-                 <div className="flex justify-start">
-                   <div className="bg-gray-800/50 text-gray-400 text-xs py-2 px-4 rounded-xl font-mono animate-pulse">
-                     @{selectedFriend.username} pisze...
-                   </div>
+                   )}
+                   {activeConv.type === 'group' && (
+                     <div className="text-xs text-gray-500 mt-0.5">
+                       {activeConv.participants.length} członków
+                     </div>
+                   )}
                  </div>
-               )}
-               <div ref={messagesEndRef} />
-             </div>
+               </div>
+               
+               <button onClick={() => setShowSettings(!showSettings)} className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white">
+                 <MoreVertical className="w-5 h-5" />
+               </button>
+            </div>
+            
+            <div className="flex-1 overflow-hidden flex relative">
+              {/* Chat Messages */}
+              <div className="flex-1 flex flex-col pt-4 overflow-y-auto custom-scrollbar px-2 sm:px-6">
+                <div className="flex flex-col justify-end min-h-full pb-4 space-y-4">
+                  {messages.map((msg, idx) => {
+                    const isMe = msg.senderId === user.uid;
+                    const isLast = idx === messages.length - 1;
+                    const showAvatar = !isMe && (idx === 0 || messages[idx-1].senderId !== msg.senderId);
+                    
+                    return (
+                      <div key={msg.id} className={`flex gap-2 max-w-[85%] ${isMe ? 'self-end' : 'self-start'}`}>
+                        {!isMe && (
+                          <div className="w-8 shrink-0 flex items-end">
+                            {showAvatar && (
+                               <UserAvatar userId={msg.senderId} username={friendsInfo[msg.senderId]?.username || ''} className="w-8 h-8 rounded-full shadow-sm" />
+                            )}
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          {!isMe && showAvatar && activeConv.type === 'group' && (
+                            <span className="text-[10px] text-gray-500 mb-1 ml-1">{friendsInfo[msg.senderId]?.username || 'Użytkownik'}</span>
+                          )}
+                          <div 
+                            className={`px-4 py-2.5 rounded-[20px] shadow-sm relative group overflow-hidden ${
+                              isMe ? 'bg-gradient-to-br from-[#007aff] to-[#005bb5] text-white rounded-br-sm' 
+                                   : 'bg-zinc-800 text-zinc-100 rounded-bl-sm border border-white/5'
+                            }`}
+                          >
+                             {msg.imageUrl && (
+                               <img src={msg.imageUrl} alt="" className="max-w-full rounded-xl mb-2 object-cover" />
+                             )}
+                             <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
+                          </div>
+                          {isMe && isLast && (
+                            <div className="flex items-center justify-end gap-1 mt-1 pr-1">
+                               {msg.seenBy.length > 1 ? (
+                                 <CheckCheck className="w-3.5 h-3.5 text-blue-400" />
+                               ) : (
+                                 <Check className="w-3.5 h-3.5 text-gray-500" />
+                               )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  
+                  {activeTypingUsers.length > 0 && (
+                    <div className="flex gap-2 self-start max-w-[85%]">
+                       <div className="w-8 shrink-0 flex items-end">
+                         <UserAvatar userId={activeTypingUsers[0]} username={friendsInfo[activeTypingUsers[0]]?.username || ''} className="w-8 h-8 rounded-full shadow-sm" />
+                       </div>
+                       <div className="bg-zinc-800 border border-white/5 px-4 py-3 rounded-[20px] rounded-bl-sm shadow-sm flex items-center gap-1 w-16 h-10">
+                         <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animation: 'typing 1.4s infinite ease-in-out', animationDelay: '0s' }}></div>
+                         <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animation: 'typing 1.4s infinite ease-in-out', animationDelay: '0.2s' }}></div>
+                         <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animation: 'typing 1.4s infinite ease-in-out', animationDelay: '0.4s' }}></div>
+                       </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} className="h-4" />
+                </div>
+              </div>
 
-             <form onSubmit={handleSend} className="p-4 border-t border-gray-800 bg-bg-dark/50 flex flex-col gap-2">
-                {imageUrl && (
-                  <div className="relative self-start pl-2">
-                    <img src={imageUrl} alt="preview" className="max-h-24 rounded-lg object-contain border border-gray-700" />
-                    <button 
-                      type="button" 
-                      onClick={() => setImageUrl(null)} 
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-400"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                )}
-                <div className="flex gap-4">
-                  <div className="flex items-center justify-center pl-2">
-                    <ImageUploadButton onImageSelected={setImageUrl} />
-                  </div>
+              {/* Chat Settings Sidebar (Slide in) */}
+              {showSettings && (
+                 <ChatSettings 
+                   conversation={activeConv}
+                   friendsInfo={friendsInfo}
+                   onClose={() => setShowSettings(false)}
+                 />
+              )}
+            </div>
+
+            {/* Input */}
+            <form onSubmit={handleSend} className="p-4 bg-black/60 backdrop-blur-md border-t border-white/10 flex flex-col gap-3 shrink-0">
+              {imageUrl && (
+                <div className="relative self-start pl-2">
+                  <img src={imageUrl} alt="preview" className="h-20 rounded-xl object-contain border border-white/10 shadow-lg" />
+                  <button type="button" onClick={() => setImageUrl(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-end gap-3 max-w-4xl mx-auto w-full">
+                <div className="pb-1">
+                  <ImageUploadButton onImageSelected={setImageUrl} />
+                </div>
+                <div className="flex-1 bg-zinc-900 border border-white/10 rounded-[24px] min-h-[44px] flex items-center pr-2 focus-within:ring-2 focus-within:ring-[#007aff]/50 focus-within:border-[#007aff] transition-all">
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => onInputChange(e.target.value)}
-                    placeholder="Napisz wiadomość..."
-                    className="flex-1 bg-transparent border-2 border-gray-800 rounded-xl px-4 py-2 outline-none focus:border-neon-blue font-sans text-white"
+                    placeholder="Wiadomość..."
+                    className="flex-1 bg-transparent px-4 py-3 outline-none text-[15px] text-white disabled:opacity-50"
                   />
                   <button 
                     type="submit"
                     disabled={!newMessage.trim() && !imageUrl}
-                    className="bg-neon-blue p-3 rounded-xl text-black hover:brightness-110 disabled:opacity-50 transition-all font-bold"
+                    className="bg-[#007aff] text-white w-8 h-8 rounded-full flex items-center justify-center hover:brightness-110 disabled:opacity-50 disabled:bg-gray-800 disabled:text-gray-500 transition-all ml-1 shrink-0"
                   >
-                    <Send className="w-5 h-5" />
+                    <Send className="w-4 h-4 ml-0.5" />
                   </button>
                 </div>
-             </form>
-           </>
-         ) : (
-           <div className="flex-1 flex items-center justify-center text-gray-500 font-sans text-sm px-4 text-center">
-             Wybierz znajomego, aby rozpocząć rozmowę.
-           </div>
-         )}
+              </div>
+            </form>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-zinc-950/50">
+            <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center mb-6 border border-white/10 shadow-2xl">
+               <Send className="w-10 h-10 text-[#007aff]" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2 font-display">Twoje Wiadomości</h2>
+            <p className="text-sm">Wyślij prywatne wiadomości do znajomych lub grupy.</p>
+          </div>
+        )}
       </div>
     </div>
   );

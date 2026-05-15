@@ -120,9 +120,53 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // --- Typing Status ---
-    match /typing_status/{comboId} {
-      allow read, write: if isSignedIn() && (request.auth.uid in comboId.split('_'));
+    match /users/{userId}/blocks/{blockedId} {
+      allow read: if isSignedIn() && userId == request.auth.uid;
+      allow create, delete: if isSignedIn() && userId == request.auth.uid;
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && request.auth.uid in incoming().participants &&
+                    incoming().keys().hasAll(['type', 'participants', 'createdAt', 'updatedAt']) &&
+                    incoming().type in ['direct', 'group'] &&
+                    incoming().participants is list && incoming().participants.size() >= 1 && incoming().participants.size() <= 50;
+      allow update: if isSignedIn() && request.auth.uid in existing().participants && (
+          // System updates for new messages
+          (incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt', 'lastMessage'])) ||
+          // Nickname updates
+          (incoming().diff(existing()).affectedKeys().hasOnly(['nicknames'])) ||
+          // Group admin updates
+          (existing().type == 'group' && request.auth.uid in existing().admins && incoming().diff(existing()).affectedKeys().hasAny(['participants', 'admins', 'name', 'photoUrl', 'updatedAt']))
+      );
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        allow create: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
+                      incoming().senderId == request.auth.uid &&
+                      incoming().keys().hasAll(['senderId', 'content', 'createdAt', 'seenBy']) &&
+                      incoming().seenBy is list &&
+                      incoming().content is string && incoming().content.size() <= 2000 &&
+                      (!('imageUrl' in incoming()) || (incoming().imageUrl is string && incoming().imageUrl.size() <= 500000));
+        allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['seenBy']);
+        allow delete: if false;
+      }
+    }
+
+    match /group_requests/{requestId} {
+      allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(resource.data.conversationId)).data.admins;
+      allow create: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(incoming().conversationId)).data.participants &&
+                    incoming().keys().hasAll(['conversationId', 'targetUserId', 'requesterId', 'createdAt']) &&
+                    incoming().requesterId == request.auth.uid;
+      allow delete: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(existing().conversationId)).data.admins;
+    }
+    match /typing_status/{conversationId} {
+      allow read, write: if isSignedIn() && (
+        (conversationId.matches('.*_.*') && request.auth.uid in conversationId.split('_')) ||
+        (request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants)
+      );
     }
 
     match /usernames/{lowercaseUsername} {

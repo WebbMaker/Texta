@@ -1,3 +1,5 @@
+export * from './types/chat';
+
 export interface Message {
   id: string;
   participants: string[];

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, setDoc, deleteDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, onSnapshot, doc, getDoc, setDoc, deleteDoc, addDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { Post, UserProfile } from '../types';
 import { UserAvatar } from '../components/UserAvatar';
 import { UserPresence } from '../components/UserPresence';
@@ -285,12 +285,33 @@ export function Profile() {
                </>
              ) : user ? (
                  isFriend ? (
-                   <button 
-                     disabled
-                     className="mt-4 sm:mt-0 flex items-center gap-2 px-6 py-2 rounded-xl font-bold uppercase text-sm tracking-widest transition-all bg-gray-800 text-neon-blue border border-neon-blue/50"
-                   >
-                     <Check className="w-4 h-4" /> Znajomi
-                   </button>
+                   <>
+                     <button 
+                       disabled
+                       className="mt-4 sm:mt-0 flex items-center gap-2 px-6 py-2 rounded-xl font-bold uppercase text-sm tracking-widest transition-all bg-gray-800 text-neon-blue border border-neon-blue/50"
+                     >
+                       <Check className="w-4 h-4" /> Znajomi
+                     </button>
+                     <button
+                       onClick={async () => {
+                          const snap = await getDocs(query(collection(db, 'conversations'), where('type', '==', 'direct'), where('participants', 'array-contains', user.uid)));
+                          let convId = snap.docs.find(d => d.data().participants.includes(profile.uid))?.id;
+                          if (!convId) {
+                             const newRef = await addDoc(collection(db, 'conversations'), {
+                               type: 'direct',
+                               participants: [user.uid, profile.uid].sort(),
+                               createdAt: Date.now(),
+                               updatedAt: Date.now()
+                             });
+                             convId = newRef.id;
+                          }
+                          navigate('/messages'); // Wait, passing ID would be better, but we don't have URL support for it in Messages.tsx yet.
+                       }}
+                       className="mt-4 sm:mt-0 flex items-center gap-2 px-6 py-2 rounded-xl font-bold uppercase text-sm tracking-widest transition-all bg-neon-blue text-black hover:brightness-110 shadow-lg"
+                     >
+                       Wiadomość
+                     </button>
+                   </>
                  ) : hasReceivedRequest ? (
                    <button 
                      onClick={handleAcceptRequest}

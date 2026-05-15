@@ -117,9 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    await signInWithPopup(auth, provider);
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      if (error.code !== 'auth/cancelled-popup-request' && error.code !== 'auth/popup-closed-by-user') {
+        console.error("Auth error:", error);
+      }
+    }
   };
 
   const signOut = async () => {
