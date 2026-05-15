@@ -133,7 +133,7 @@ export function Videos() {
                 <h1 className="text-4xl font-black tracking-tight text-white uppercase">Filmy</h1>
                 <span className="bg-red-600/10 text-red-500 text-[10px] font-mono px-2 py-0.5 rounded border border-red-500/20 uppercase tracking-widest font-bold">Beta</span>
               </div>
-              <p className="text-gray-500 font-mono text-sm tracking-widest uppercase">Zentralizowany strumień wizualny</p>
+              <p className="text-gray-500 font-mono text-sm tracking-widest uppercase">Oglądaj komentuj i Polubiaj filmy!</p>
             </div>
           </div>
 

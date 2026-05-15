@@ -44,10 +44,10 @@ export function About() {
         </div>
       </div>
 
-      <div className="bg-surface border border-gray-800 rounded-2xl p-8 mt-12 text-center text-gray-300 font-mono text-sm leading-loose">
-        <p>WERSJA SYSTEMU: v1.0.0</p>
-        <p>STATUS PROTOKOŁU: ZABEZPIECZONY</p>
-        <p>MODUŁY: AUTORYZACJA, GŁÓWNY_STRUMIEŃ, PRYWATNE_KANAŁY</p>
+      <div className="bg-surface border border-gray-800 rounded-2xl p-8 mt-12 text-center text-gray-300 text-sm leading-relaxed">
+        <h4 className="text-white font-bold text-lg mb-2">Dziękujemy, że jesteś z nami!</h4>
+        <p>Tworzymy to miejsce dla naszej wspaniałej społeczności. Nieustannie pracujemy nad tym, aby było ono jak najbardziej przyjazne, bezpieczne i otwarte dla każdego.</p>
+        <p className="mt-2 text-gray-400">Śmiało eksploruj, poznawaj nowych ludzi i dziel się swoimi pasjami!</p>
       </div>
     </div>
   );

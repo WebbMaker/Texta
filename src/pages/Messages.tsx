@@ -32,6 +32,7 @@ export function Messages() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{uid: string, username: string, avatarUrl?: string}[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [friendRequests, setFriendRequests] = useState<{uid: string, username: string, sentAt: number}[]>([]);
   
   const [typings, setTypings] = useState<Record<string, boolean>>({});
   const [friendsInfo, setFriendsInfo] = useState<Record<string, {username: string, avatarUrl?: string}>>({});
@@ -40,13 +41,27 @@ export function Messages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load friends
+  // Load friends and friend requests
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(collection(db, 'users', user.uid, 'friends'), (snap) => {
+    const unsubFriends = onSnapshot(collection(db, 'users', user.uid, 'friends'), (snap) => {
       setFriends(snap.docs.map(d => d.id));
     });
-    return () => unsub();
+
+    const freqRef = collection(db, 'users', user.uid, 'friend_requests');
+    const qFreq = query(freqRef, orderBy('sentAt', 'desc'));
+    const unsubFreqs = onSnapshot(qFreq, (snapshot) => {
+      const newFreqs: {uid: string, username: string, sentAt: number}[] = [];
+      snapshot.forEach(docSnap => {
+        newFreqs.push({ uid: docSnap.id, ...(docSnap.data() as any) });
+      });
+      setFriendRequests(newFreqs);
+    });
+
+    return () => {
+      unsubFriends();
+      unsubFreqs();
+    };
   }, [user]);
 
   // Search users effect
@@ -332,6 +347,32 @@ export function Messages() {
     typingTimeoutRef.current = setTimeout(() => handleTyping(false), 3000);
   };
 
+  const handleAcceptRequest = async (requesterUid: string, requesterUsername: string) => {
+    if (!user || !profile) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'friends', requesterUid), {
+        username: requesterUsername,
+        addedAt: Date.now()
+      });
+      await setDoc(doc(db, 'users', requesterUid, 'friends', user.uid), {
+        username: profile.username,
+        addedAt: Date.now()
+      });
+      await deleteDoc(doc(db, 'users', user.uid, 'friend_requests', requesterUid));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRejectRequest = async (requesterUid: string) => {
+    if (!user) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'friend_requests', requesterUid));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const activeTypingUsers = Object.keys(typings).filter(uid => typings[uid]);
 
   if (!user) return <div className="text-center py-12">Zaloguj się...</div>;
@@ -378,6 +419,36 @@ export function Messages() {
              </div>
            )}
         </div>
+
+        {friendRequests.length > 0 && (
+           <div className="p-3 border-b border-white/5 bg-[#007aff]/10 flex flex-col gap-2">
+             <h3 className="text-xs font-bold uppercase tracking-widest text-[#007aff] px-1">Zaproszenia ({friendRequests.length})</h3>
+             <div className="max-h-[150px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
+               {friendRequests.map(req => (
+                 <div key={req.uid} className="bg-black/40 rounded-xl p-2 border border-[#007aff]/20 flex flex-col gap-2">
+                   <div className="flex items-center gap-2">
+                     <UserAvatar userId={req.uid} username={req.username} className="w-6 h-6 rounded-full" />
+                     <span className="text-sm font-semibold truncate flex-1 leading-none">{req.username}</span>
+                   </div>
+                   <div className="flex gap-2">
+                     <button
+                       onClick={() => handleAcceptRequest(req.uid, req.username)}
+                       className="flex-1 bg-[#007aff] text-white py-1.5 rounded-lg text-xs font-bold hover:brightness-110 flex justify-center items-center gap-1"
+                     >
+                       <Check className="w-3 h-3" /> Akceptuj
+                     </button>
+                     <button
+                       onClick={() => handleRejectRequest(req.uid)}
+                       className="flex-1 bg-white/10 text-white hover:bg-white/20 py-1.5 rounded-lg text-xs font-bold flex justify-center items-center gap-1"
+                     >
+                       <X className="w-3 h-3" /> Odrzuć
+                     </button>
+                   </div>
+                 </div>
+               ))}
+             </div>
+           </div>
+        )}
 
         <div className="p-4 border-b border-white/5 flex items-center justify-between">
           <h1 className="text-xl font-bold font-display">Czaty</h1>
