@@ -423,7 +423,7 @@ export function Messages() {
         {friendRequests.length > 0 && (
            <div className="p-3 border-b border-white/5 bg-[#007aff]/10 flex flex-col gap-2">
              <h3 className="text-xs font-bold uppercase tracking-widest text-[#007aff] px-1">Zaproszenia ({friendRequests.length})</h3>
-             <div className="max-h-[150px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
+             <div className="max-h-[150px] overflow-y-auto scrollbar-hide flex flex-col gap-2">
                {friendRequests.map(req => (
                  <div key={req.uid} className="bg-black/40 rounded-xl p-2 border border-[#007aff]/20 flex flex-col gap-2">
                    <div className="flex items-center gap-2">
@@ -450,33 +450,42 @@ export function Messages() {
            </div>
         )}
 
-        <div className="p-4 border-b border-white/5 flex items-center justify-between">
-          <h1 className="text-xl font-bold font-display">Czaty</h1>
-          <button onClick={() => setShowCreateGroup(true)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors" title="Nowa grupa">
-            <Pencil className="w-5 h-5 text-white/80" />
+        <div className="p-5 flex items-center justify-between">
+          <h1 className="text-xl font-bold font-display tracking-tight text-white/90">Czaty</h1>
+          <button onClick={() => setShowCreateGroup(true)} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors group" title="Nowa grupa">
+            <Pencil className="w-5 h-5 text-white/60 group-hover:text-white transition-colors" />
           </button>
         </div>
         
         {/* Recent users bubbles */}
-        <div className="p-4 border-b border-white/5 overflow-x-auto whitespace-nowrap scrollbar-hide flex gap-4">
+        <div className="px-5 pb-4 border-b border-white/5 overflow-x-auto whitespace-nowrap scrollbar-hide flex gap-4">
            {visibleConversations.map(c => {
              return (
-               <div key={c.id} onClick={() => setActiveConvId(c.id)} className="cursor-pointer inline-flex flex-col items-center gap-1 w-16 group">
+               <div key={c.id} onClick={() => setActiveConvId(c.id)} className="cursor-pointer inline-flex flex-col items-center gap-2 w-[4.5rem] group">
                  <div className="relative group-hover:-translate-y-1 transition-transform">
                    {getConvAvatar(c)}
                    {c.type === 'direct' && c.participants.find(p=>p!==user.uid) && (
-                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black">
-                       <UserPresence userId={c.participants.find(p=>p!==user.uid)!} hideLabel />
+                     <UserPresence 
+                       userId={c.participants.find(p=>p!==user.uid)!} 
+                       hideLabel 
+                       className="absolute bottom-0 right-0 w-3 h-3 shadow-sm border-[1.5px] border-black/40 z-10" 
+                     />
+                   )}
+                 </div>
+                 <div className="flex flex-col items-center w-full">
+                   <span className="text-[11px] font-medium text-white/60 truncate w-full text-center group-hover:text-white/90 transition-colors">{getConvName(c).split(' ')[0]}</span>
+                   {c.type === 'direct' && c.participants.find(p=>p!==user.uid) && (
+                     <div className="mt-0.5 min-h-[14px]">
+                       <UserPresence userId={c.participants.find(p=>p!==user.uid)!} hideLabel={false} className="text-[9px]" />
                      </div>
                    )}
                  </div>
-                 <span className="text-[10px] text-white/50 truncate w-full text-center">{getConvName(c).split(' ')[0]}</span>
                </div>
              )
            })}
         </div>
 
-        <div className="flex-1 overflow-y-auto w-full">
+        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
           {visibleConversations.map(c => {
             const isActive = activeConvId === c.id;
             const friendId = c.type === 'direct' ? c.participants.find(p => p !== user.uid) : null;
@@ -487,29 +496,36 @@ export function Messages() {
               <button 
                 key={c.id} 
                 onClick={() => setActiveConvId(c.id)}
-                className={`w-full p-4 flex items-center gap-3 transition-colors text-left ${isActive ? 'bg-white/5' : 'hover:bg-white/[0.02]'}`}
+                className={`w-full p-3 rounded-2xl flex items-center gap-4 transition-all duration-200 text-left ${isActive ? 'bg-white/10 shadow-lg' : 'hover:bg-white/5'}`}
               >
                 <div className="relative shrink-0">
                   {getConvAvatar(c)}
                   {friendId && (
-                     <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black" style={{ transform: 'translate(10%, 10%)' }}>
-                       <UserPresence userId={friendId} hideLabel />
-                     </div>
+                     <UserPresence 
+                       userId={friendId} 
+                       hideLabel 
+                       className="absolute bottom-0 right-0 w-3.5 h-3.5 shadow-sm border-[1.5px] border-black/40 z-10" 
+                     />
                   )}
                 </div>
-                <div className="flex-1 min-w-0 flex flex-col">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <span className={`font-semibold truncate ${hasUnread ? 'text-white' : 'text-gray-200'}`}>
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <div className="flex items-center gap-2 mb-1 w-full overflow-hidden">
+                    <span className={`font-semibold truncate tracking-tight text-[15px] ${hasUnread ? 'text-white' : 'text-gray-200'} shrink`}>
                       {getConvName(c)}
                     </span>
+                    {friendId && (
+                      <div className="shrink-0 flex items-center">
+                        <UserPresence userId={friendId} hideLabel={false} className="text-[10px]" />
+                      </div>
+                    )}
                     {c.updatedAt && (
-                      <span className="text-[10px] text-gray-500 whitespace-nowrap ml-2 shrink-0">
+                      <span className="text-[11px] font-medium text-gray-500/80 whitespace-nowrap ml-auto shrink-0 pl-2">
                         {new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </span>
                     )}
                   </div>
                   {c.lastMessage && (
-                     <p className={`text-xs truncate ${hasUnread ? 'text-white font-bold' : 'text-gray-500'}`}>
+                     <p className={`text-[13px] truncate leading-tight w-full pr-4 ${hasUnread ? 'text-white font-medium' : 'text-gray-500'}`}>
                         {c.lastMessage.senderId === user.uid ? 'Ty: ' : ''}{c.lastMessage.text}
                      </p>
                   )}
@@ -550,8 +566,9 @@ export function Messages() {
             
             <div className="flex-1 overflow-hidden flex relative">
               {/* Chat Messages */}
-              <div className="flex-1 flex flex-col pt-4 overflow-y-auto custom-scrollbar px-2 sm:px-6">
-                <div className="flex flex-col justify-end min-h-full pb-4 space-y-4">
+              <div className="flex-1 overflow-y-auto scrollbar-hide px-2 sm:px-6 flex flex-col">
+                <div className="flex-1"></div>
+                <div className="flex flex-col pb-4 space-y-4">
                   {messages.map((msg, idx) => {
                     const isMe = msg.senderId === user.uid;
                     const isLast = idx === messages.length - 1;

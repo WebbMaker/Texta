@@ -8,6 +8,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { AuthModal } from './AuthModal';
 import { Sidebar } from './Sidebar';
+import logoUrl from '../assets/images/regenerated_image_1779032037705.png';
 
 export function Layout() {
   const { user, profile, signOut } = useAuth();
@@ -101,9 +102,7 @@ export function Layout() {
       <header className="sticky top-0 z-40 border-b border-white/5 bg-black/60 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity group flex-shrink-0">
-            <div className="w-10 h-10 bg-gradient-to-br from-neon-blue to-neon-purple rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-              <span className="text-white font-black text-2xl tracking-tighter mt-0.5">T</span>
-            </div>
+            <img src={logoUrl} alt="Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg group-hover:scale-105 transition-transform" />
             <span className="text-2xl font-black tracking-tight font-display hidden sm:inline-block">
               texta
             </span>

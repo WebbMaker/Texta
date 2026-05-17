@@ -81,36 +81,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const handleVisibilityChange = () => {
-      updatePresence(document.visibilityState === 'visible');
-    };
-
     const handleUnload = () => {
       updatePresence(false);
     };
 
     window.addEventListener('beforeunload', handleUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Initial heartbeats
     updatePresence(true);
     const heartbeat = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        updatePresence(true);
+      updatePresence(true);
         
-        // Track time for logged in users
-        if (auth.currentUser) {
-          updateDoc(doc(db, 'users', auth.currentUser.uid), {
-            totalTimeSpent: increment(60)
-          }).catch(() => {});
-        }
+      // Track time for logged in users
+      if (document.visibilityState === 'visible' && auth.currentUser) {
+        updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          totalTimeSpent: increment(60)
+        }).catch(() => {});
       }
     }, 60000);
 
     return () => {
       unsubscribeAuth();
       window.removeEventListener('beforeunload', handleUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(heartbeat);
       updatePresence(false);
     };
