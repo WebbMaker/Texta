@@ -476,7 +476,7 @@ export function Messages() {
                    <span className="text-[11px] font-medium text-white/60 truncate w-full text-center group-hover:text-white/90 transition-colors">{getConvName(c).split(' ')[0]}</span>
                    {c.type === 'direct' && c.participants.find(p=>p!==user.uid) && (
                      <div className="mt-0.5 min-h-[14px]">
-                       <UserPresence userId={c.participants.find(p=>p!==user.uid)!} hideLabel={false} className="text-[9px]" />
+                       <UserPresence userId={c.participants.find(p=>p!==user.uid)!} hideLabel={false} hideActiveText={true} className="text-[9px]" />
                      </div>
                    )}
                  </div>
@@ -594,7 +594,7 @@ export function Messages() {
                             }`}
                           >
                              {msg.imageUrl && (
-                               <img src={msg.imageUrl} alt="" className="w-44 h-44 rounded-xl mb-2 object-cover block" />
+                               <img src={msg.imageUrl} alt="" className="max-w-[240px] max-h-[320px] rounded-xl mb-2" />
                              )}
                              <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
                           </div>

@@ -6,9 +6,10 @@ interface UserPresenceProps {
   userId: string;
   className?: string;
   hideLabel?: boolean;
+  hideActiveText?: boolean;
 }
 
-export function UserPresence({ userId, className = "", hideLabel = false }: UserPresenceProps) {
+export function UserPresence({ userId, className = "", hideLabel = false, hideActiveText = false }: UserPresenceProps) {
   const [isOnline, setIsOnline] = useState(false);
   const [lastActive, setLastActive] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -52,6 +53,7 @@ export function UserPresence({ userId, className = "", hideLabel = false }: User
   };
 
   if (trulyOnline) {
+    if (hideActiveText) return null;
     return (
       <span className={`text-[11px] font-medium text-green-500 tracking-tight ${className}`}>
         Aktywny teraz
