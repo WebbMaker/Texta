@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, writeBatch, limitToLast, deleteDoc } from 'firebase/firestore';
 import { Link } from 'react-router';
-import { Send, Check, X, CheckCheck, Users, Search, Target, Pencil, MoreVertical, Reply } from 'lucide-react';
+import { Send, Check, X, CheckCheck, Users, Search, Target, Pencil, MoreVertical, Reply, ArrowLeft } from 'lucide-react';
 import { ImageUploadButton } from '../components/ImageUploadButton';
 import { UserAvatar } from '../components/UserAvatar';
 import { UserPresence } from '../components/UserPresence';
@@ -25,6 +25,7 @@ export function Messages() {
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [messagesLimit, setMessagesLimit] = useState(35);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,7 @@ export function Messages() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isLoadingMore = useRef(false);
 
   // Load friends and friend requests
   useEffect(() => {
@@ -216,32 +218,60 @@ export function Messages() {
     return () => unsub();
   }, [user]);
 
+  // Reset messagesLimit when activeConvId changes
+  useEffect(() => {
+    setMessagesLimit(35);
+  }, [activeConvId]);
+
   // Load active conversation messages
   useEffect(() => {
     if (!user || !activeConvId) return;
     
+    // Remember scroll position when limit changes
+    const container = document.getElementById('messages-container');
+    const isAtBottom = container 
+      ? container.scrollHeight - container.scrollTop - container.clientHeight < 100 
+      : true;
+
     const q = query(
       collection(db, 'conversations', activeConvId, 'messages'),
-      orderBy('createdAt', 'asc')
+      orderBy('createdAt', 'asc'),
+      limitToLast(messagesLimit)
     );
     
     const unsub = onSnapshot(q, (snap) => {
       const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ConversationMessage));
       setMessages(msgs);
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      
+      requestAnimationFrame(() => {
+        if (container) {
+          if (messagesLimit === 35 || isAtBottom) {
+            // Scroll to bottom on initial load or if user is near bottom
+            messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+          }
+        }
+      });
       
       // Mark as seen
       const unseen = snap.docs.filter(d => {
         const m = d.data() as ConversationMessage;
         return m.senderId !== user.uid && !m.seenBy.includes(user.uid);
       });
+      
       if (unseen.length > 0) {
-        const batch = writeBatch(db);
-        unseen.forEach(d => {
-          batch.update(d.ref, { seenBy: [...d.data().seenBy, user.uid] });
-        });
-        batch.commit();
+        // Chunk into batches of 15 to avoid firestore rules getting hit by 20 `get()` limit per batch
+        const chunkSize = 15;
+        for (let i = 0; i < unseen.length; i += chunkSize) {
+          const chunk = unseen.slice(i, i + chunkSize);
+          const batch = writeBatch(db);
+          chunk.forEach(d => {
+            batch.update(d.ref, { seenBy: [...d.data().seenBy, user.uid] });
+          });
+          batch.commit().catch(e => console.error("Batch update failed:", e));
+        }
       }
+    }, (error) => {
+      console.error("Messages list error:", error);
     });
 
     // Typing status listener
@@ -262,7 +292,7 @@ export function Messages() {
     });
 
     return () => { unsub(); unsubTyping(); };
-  }, [user, activeConvId]);
+  }, [user, activeConvId, messagesLimit]);
 
   const visibleConversations = conversations.filter(c => {
     if (c.type === 'group') return true;
@@ -394,7 +424,7 @@ export function Messages() {
       {showCreateGroup && <CreateGroupModal onClose={() => setShowCreateGroup(false)} onGroupCreated={(id) => { setActiveConvId(id); setShowCreateGroup(false); }} />}
       
       {/* Sidebar */}
-      <div className="w-[350px] border-r border-white/10 flex flex-col bg-zinc-950/50 backdrop-blur-xl">
+      <div className={`w-full md:w-[350px] border-r border-white/10 flex flex-col bg-zinc-950/50 backdrop-blur-xl shrink-0 ${activeConvId ? 'hidden md:flex' : 'flex'}`}>
         {/* User Search */}
         <div className="p-3 border-b border-white/5 bg-black/40">
            <div className="relative">
@@ -548,15 +578,31 @@ export function Messages() {
       </div>
 
       {/* Main Chat */}
-      <div className="flex-1 flex flex-col relative bg-zinc-950/80">
+      <div className={`flex-1 flex flex-col relative bg-zinc-950/80 ${activeConvId ? 'flex' : 'hidden md:flex'}`}>
+        {activeConvId && (
+          <div className="md:hidden absolute top-4 left-4 z-50">
+             <button 
+               onClick={() => setActiveConvId(null)}
+               className="p-2 bg-black/60 backdrop-blur-md rounded-full text-white/70 hover:text-white border border-white/10 shadow-xl"
+             >
+               <ArrowLeft className="w-6 h-6" />
+             </button>
+          </div>
+        )}
+        
         {activeConvId && activeConv ? (
           <>
             {/* Header */}
-            <div className="h-[73px] border-b border-white/10 px-6 flex items-center justify-between bg-black/40 backdrop-blur-md z-10 shrink-0">
-               <div className="flex items-center gap-4">
-                 {getConvAvatar(activeConv)}
-                 <div className="flex flex-col">
-                   <h2 className="font-bold text-lg leading-tight">{getConvName(activeConv)}</h2>
+            <div className="h-[73px] border-b border-white/10 px-4 sm:px-6 flex items-center justify-between bg-black/40 backdrop-blur-md z-10 shrink-0">
+               <div className="flex items-center gap-3 sm:gap-4 overflow-hidden">
+                 <div className="hidden md:block">
+                   {getConvAvatar(activeConv)}
+                 </div>
+                 <div className="md:hidden ml-12">
+                   {getConvAvatar(activeConv)}
+                 </div>
+                 <div className="flex flex-col overflow-hidden">
+                   <h2 className="font-bold text-base sm:text-lg leading-tight truncate">{getConvName(activeConv)}</h2>
                    {activeConv.type === 'direct' && (
                      <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                        <UserPresence userId={activeConv.participants.find(p => p !== user.uid)!} />
@@ -577,7 +623,20 @@ export function Messages() {
             
             <div className="flex-1 overflow-hidden flex relative">
               {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto scrollbar-hide px-2 sm:px-6 flex flex-col">
+              <div 
+                id="messages-container"
+                onScroll={(e) => {
+                  const target = e.currentTarget;
+                  if (target.scrollTop < 100 && !isLoadingMore.current && messages.length >= messagesLimit) {
+                    isLoadingMore.current = true;
+                    setMessagesLimit(prev => prev + 35);
+                    setTimeout(() => {
+                      isLoadingMore.current = false;
+                    }, 500);
+                  }
+                }}
+                className="flex-1 overflow-y-auto scrollbar-hide px-2 sm:px-6 flex flex-col"
+              >
                 <div className="flex-1"></div>
                 <div className="flex flex-col pb-4 space-y-4">
                   {messages.map((msg, idx) => {
@@ -617,7 +676,7 @@ export function Messages() {
 
                              {msg.replyTo && (
                                <div 
-                                 className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-white/30 text-[13px] opacity-70 cursor-pointer hover:opacity-100 transition-opacity"
+                                 className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-white/30 text-[13px] opacity-70 cursor-pointer hover:opacity-100 transition-opacity min-w-0"
                                  onClick={() => {
                                    // In a real app we'd scroll to the message
                                  }}
@@ -627,7 +686,7 @@ export function Messages() {
                                    <span className="font-medium mr-1">
                                      {msg.replyTo.senderId === user.uid ? 'Ty' : (friendsInfo[msg.replyTo.senderId]?.username || 'Ktoś')}
                                    </span>
-                                   {msg.replyTo.imageUrl ? 'Wysłał(a) zdjęcie' : msg.replyTo.content}
+                                   {msg.replyTo.imageUrl ? 'Wysłał(a) zdjęcie' : (msg.replyTo.content.length > 40 ? msg.replyTo.content.substring(0, 40) + '...' : msg.replyTo.content)}
                                  </div>
                                </div>
                              )}
@@ -686,7 +745,7 @@ export function Messages() {
                       Odpowiedź do: {replyingTo.senderId === user.uid ? 'Ty' : (friendsInfo[replyingTo.senderId]?.username || 'Użytkownika')}
                     </p>
                     <p className="text-[13px] text-gray-300 truncate">
-                      {replyingTo.imageUrl ? 'Zdjęcie' : replyingTo.content}
+                      {replyingTo.imageUrl ? 'Zdjęcie' : (replyingTo.content.length > 40 ? replyingTo.content.substring(0, 40) + '...' : replyingTo.content)}
                     </p>
                   </div>
                   <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white">
