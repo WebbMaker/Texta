@@ -13,7 +13,7 @@ import {
   updateDoc 
 } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { ChevronLeft, Send, MessageSquare, Terminal, User, Clock } from 'lucide-react';
+import { ChevronLeft, Send, MessageSquare, Terminal, User, Clock, Reply, X } from 'lucide-react';
 import { UserAvatar } from '../components/UserAvatar';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -23,6 +23,11 @@ interface ForumPost {
   senderId: string;
   senderUsername: string;
   createdAt: any;
+  replyTo?: {
+     messageId: string;
+     text: string;
+     senderUsername: string;
+  };
 }
 
 interface ForumTopic {
@@ -39,6 +44,7 @@ export function TopicDetail() {
   const [topic, setTopic] = useState<ForumTopic | null>(null);
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [newPost, setNewPost] = useState('');
+  const [replyingTo, setReplyingTo] = useState<ForumPost | null>(null);
   const [loading, setLoading] = useState(true);
   const { user, profile } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -84,15 +90,28 @@ export function TopicDetail() {
     if (!newPost.trim() || !user || !profile || !topicId) return;
 
     const postContent = newPost.trim();
+    const currentReply = replyingTo;
+    
     setNewPost('');
+    setReplyingTo(null);
 
     try {
-      await addDoc(collection(db, 'forum_posts', topicId, 'messages'), {
+      const msgData: any = {
         text: postContent,
         senderId: user.uid,
         senderUsername: profile.username,
         createdAt: serverTimestamp()
-      });
+      };
+      
+      if (currentReply) {
+        msgData.replyTo = {
+          messageId: currentReply.id,
+          text: currentReply.text,
+          senderUsername: currentReply.senderUsername
+        };
+      }
+
+      await addDoc(collection(db, 'forum_posts', topicId, 'messages'), msgData);
 
       // Update last activity in topic
       await updateDoc(doc(db, 'forum_topics', topicId), {
@@ -170,12 +189,31 @@ export function TopicDetail() {
                     className="w-12 h-12 border border-white/10 shadow-sm"
                   />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 relative group/msg">
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-[10px] font-bold text-white uppercase tracking-wider">{post.senderUsername}</span>
                     <span className="text-[10px] font-medium text-white/20 uppercase tracking-widest">{formatDate(post.createdAt)}</span>
                   </div>
+                  
+                  {/* Reply button on hover */}
+                  <button
+                     onClick={() => setReplyingTo(post)}
+                     title="Odpowiedz"
+                     className="absolute top-1 right-2 p-1.5 bg-black/40 hover:bg-black/80 rounded-full text-white/70 hover:text-white backdrop-blur-md opacity-0 group-hover/msg:opacity-100 transition-all z-10"
+                   >
+                      <Reply className="w-4 h-4" />
+                  </button>
+
                   <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-none p-5 text-white/90 leading-relaxed backdrop-blur-sm shadow-sm">
+                    {post.replyTo && (
+                      <div className="flex items-center gap-2 mb-3 pl-3 border-l-2 border-white/30 text-[12px] opacity-70">
+                        <Reply className="w-3 h-3 shrink-0" />
+                        <div className="flex-1 truncate">
+                          <span className="font-bold mr-1">{post.replyTo.senderUsername === profile?.username ? 'Ty' : post.replyTo.senderUsername}</span>
+                          {post.replyTo.text}
+                        </div>
+                      </div>
+                    )}
                     {post.text}
                   </div>
                 </div>
@@ -185,7 +223,23 @@ export function TopicDetail() {
         </div>
 
         {/* Input Area */}
-        <div className="p-8 bg-white/5 backdrop-blur-xl border-t border-white/5">
+        <div className="p-8 bg-white/5 backdrop-blur-xl border-t border-white/5 flex flex-col">
+          {replyingTo && (
+            <div className="mb-4 bg-white/5 rounded-xl p-3 pb-2 flex items-start gap-3 relative border border-white/10 w-full mb-4">
+              <Reply className="w-4 h-4 mt-0.5 text-gray-400" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium text-white/60 mb-0.5">
+                  Odpowiedź do: {replyingTo.senderId === user?.uid ? 'Ty' : replyingTo.senderUsername}
+                </p>
+                <p className="text-[13px] text-gray-300 truncate">
+                  {replyingTo.text}
+                </p>
+              </div>
+              <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white absolute top-2 right-2">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           {!user ? (
             <div className="p-4 text-center bg-white/5 border border-dashed border-white/10 rounded-2xl">
               <p className="text-xs font-semibold text-white/30 uppercase tracking-widest">

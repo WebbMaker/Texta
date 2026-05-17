@@ -5,7 +5,7 @@ import { Comment } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router';
-import { X } from 'lucide-react';
+import { X, Reply } from 'lucide-react';
 import { ImageUploadButton } from './ImageUploadButton';
 import { createNotification } from '../lib/actions';
 
@@ -21,6 +21,7 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
+  const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user, profile } = useAuth();
@@ -51,10 +52,12 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
 
     const commentContent = newComment.trim();
     const mediaUrl = imageUrl;
+    const currentReply = replyingTo;
 
     // Clear input immediately for instant feedback
     setNewComment('');
     setImageUrl(null);
+    setReplyingTo(null);
     setIsSubmitting(true);
 
     try {
@@ -71,6 +74,13 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
       };
       if (mediaUrl) {
          commentData.imageUrl = mediaUrl;
+      }
+      if (currentReply) {
+        commentData.replyTo = {
+           commentId: currentReply.id,
+           content: currentReply.content,
+           authorUsername: currentReply.authorUsername
+        };
       }
       batch.set(newCommentRef, commentData);
 
@@ -105,7 +115,7 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
           <div className="text-sm text-neutral-500 italic font-mono">Brak komentarzy.</div>
         ) : (
           comments.map(comment => (
-            <CommentItem key={comment.id} comment={comment} />
+            <CommentItem key={comment.id} comment={comment} onReply={(c) => setReplyingTo(c)} />
           ))
         )}
       </div>
@@ -124,6 +134,26 @@ export function CommentSection({ targetId, targetType, authorId }: CommentSectio
         </div>
       ) : profile && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+          {replyingTo && (
+            <div className="mb-2 bg-white/5 rounded-xl p-3 flex items-start gap-3 relative border border-white/10">
+              <Reply className="w-4 h-4 mt-0.5 text-gray-400" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium text-[#007aff] mb-0.5">
+                  Odpowiedź do: {replyingTo.authorId === user?.uid ? 'Ty' : replyingTo.authorUsername}
+                </p>
+                <p className="text-[13px] text-gray-300 truncate">
+                  {replyingTo.content}
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setReplyingTo(null)} 
+                className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           {imageUrl && (
             <div className="relative self-start">
                <img src={imageUrl} alt="preview" className="max-h-24 rounded-lg object-contain border border-gray-700" />

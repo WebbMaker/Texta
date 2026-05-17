@@ -22,4 +22,10 @@ export interface ConversationMessage {
   imageUrl?: string;
   createdAt: number;
   seenBy: string[];
+  replyTo?: {
+    messageId: string;
+    content: string;
+    senderId: string;
+    imageUrl?: string;
+  };
 }

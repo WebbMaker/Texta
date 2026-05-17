@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { Send, Hash, MessageSquare, Terminal } from 'lucide-react';
+import { Send, Hash, MessageSquare, Terminal, Reply, X } from 'lucide-react';
 import { UserAvatar } from '../components/UserAvatar';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -12,11 +12,17 @@ interface GlobalMessage {
   senderId: string;
   senderUsername: string;
   createdAt: any;
+  replyTo?: {
+     messageId: string;
+     text: string;
+     senderUsername: string;
+  };
 }
 
 export function GlobalChat() {
   const [messages, setMessages] = useState<GlobalMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [replyingTo, setReplyingTo] = useState<GlobalMessage | null>(null);
   const [loading, setLoading] = useState(true);
   const { user, profile } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,15 +58,27 @@ export function GlobalChat() {
     if (!newMessage.trim() || !user || !profile) return;
 
     const messageContent = newMessage.trim();
+    const currentReply = replyingTo;
     setNewMessage('');
+    setReplyingTo(null);
 
     try {
-      await addDoc(collection(db, 'global_messages'), {
+      const msgData: any = {
         text: messageContent,
         senderId: user.uid,
         senderUsername: profile.username,
         createdAt: serverTimestamp()
-      });
+      };
+      
+      if (currentReply) {
+        msgData.replyTo = {
+          messageId: currentReply.id,
+          text: currentReply.text,
+          senderUsername: currentReply.senderUsername
+        };
+      }
+
+      await addDoc(collection(db, 'global_messages'), msgData);
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -118,17 +136,38 @@ export function GlobalChat() {
                 )}
                 {sameAuthor && <div className="w-10" />}
 
-                <div className={`max-w-[70%] sm:max-w-[60%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
+                <div className={`max-w-[70%] sm:max-w-[60%] ${isMe ? 'items-end' : 'items-start'} flex flex-col relative group/msg`}>
                   {!sameAuthor && (
                     <span className="text-[10px] font-bold text-white/30 mb-1 px-1">
                       {msg.senderUsername}
                     </span>
                   )}
+                  
+                  {/* Reply button on hover */}
+                  <button
+                     onClick={() => setReplyingTo(msg)}
+                     title="Odpowiedz"
+                     className={`absolute top-1/2 -translate-y-1/2 p-1.5 bg-black/40 hover:bg-black/80 rounded-full text-white/70 hover:text-white backdrop-blur-md opacity-0 group-hover/msg:opacity-100 transition-all z-10
+                       ${isMe ? '-left-10' : '-right-10'}
+                     `}
+                   >
+                      <Reply className="w-4 h-4" />
+                   </button>
+
                   <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                     isMe 
                     ? 'bg-white text-black font-medium rounded-tr-none shadow-lg' 
                     : 'bg-white/5 text-white border border-white/10 rounded-tl-none backdrop-blur-md'
                   }`}>
+                    {msg.replyTo && (
+                      <div className={`flex items-center gap-2 mb-2 pl-2 border-l-2 text-[12px] opacity-70 ${isMe ? 'border-black/30' : 'border-white/30'}`}>
+                        <Reply className="w-3 h-3 shrink-0" />
+                        <div className="flex-1 truncate">
+                          <span className="font-bold mr-1">{msg.replyTo.senderUsername === profile?.username ? 'Ty' : msg.replyTo.senderUsername}</span>
+                          {msg.replyTo.text}
+                        </div>
+                      </div>
+                    )}
                     {msg.text}
                   </div>
                 </div>
@@ -139,7 +178,23 @@ export function GlobalChat() {
       </div>
 
       {/* Input Area */}
-      <div className="p-6 bg-white/5 backdrop-blur-xl border-t border-white/5">
+      <div className="p-6 bg-white/5 backdrop-blur-xl border-t border-white/5 flex flex-col">
+        {replyingTo && (
+          <div className="mb-4 bg-white/5 rounded-xl p-3 pb-2 flex items-start gap-3 relative border border-white/10 max-w-4xl mx-auto w-full">
+            <Reply className="w-4 h-4 mt-0.5 text-gray-400" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-medium text-white/60 mb-0.5">
+                Odpowiedź do: {replyingTo.senderId === user?.uid ? 'Ty' : replyingTo.senderUsername}
+              </p>
+              <p className="text-[13px] text-gray-300 truncate">
+                {replyingTo.text}
+              </p>
+            </div>
+            <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white absolute top-2 right-2">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {!user ? (
           <div className="py-4 text-center bg-white/5 border border-dashed border-white/10 rounded-2xl">
             <p className="text-xs text-white/40 font-medium">

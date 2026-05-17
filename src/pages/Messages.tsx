@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, getDoc, setDoc, addDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { Link } from 'react-router';
-import { Send, Check, X, CheckCheck, Users, Search, Target, Pencil, MoreVertical } from 'lucide-react';
+import { Send, Check, X, CheckCheck, Users, Search, Target, Pencil, MoreVertical, Reply } from 'lucide-react';
 import { ImageUploadButton } from '../components/ImageUploadButton';
 import { UserAvatar } from '../components/UserAvatar';
 import { UserPresence } from '../components/UserPresence';
@@ -31,6 +31,7 @@ export function Messages() {
   const [showSettings, setShowSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{uid: string, username: string, avatarUrl?: string}[]>([]);
+  const [replyingTo, setReplyingTo] = useState<ConversationMessage | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [friendRequests, setFriendRequests] = useState<{uid: string, username: string, sentAt: number}[]>([]);
   
@@ -302,9 +303,11 @@ export function Messages() {
     
     const msgText = newMessage.trim();
     const curImg = imageUrl;
+    const currentReply = replyingTo;
     
     setNewMessage('');
     setImageUrl(null);
+    setReplyingTo(null);
     handleTyping(false);
 
     try {
@@ -315,6 +318,14 @@ export function Messages() {
         seenBy: [user.uid]
       };
       if (curImg) msgData.imageUrl = curImg;
+      if (currentReply) {
+        msgData.replyTo = {
+          messageId: currentReply.id,
+          content: currentReply.content,
+          senderId: currentReply.senderId,
+          imageUrl: currentReply.imageUrl || null
+        };
+      }
       
       await addDoc(collection(db, 'conversations', activeConvId, 'messages'), msgData);
       
@@ -588,11 +599,38 @@ export function Messages() {
                             <span className="text-[10px] text-gray-500 mb-1 ml-1">{friendsInfo[msg.senderId]?.username || 'Użytkownik'}</span>
                           )}
                           <div 
-                            className={`px-4 py-2.5 rounded-[20px] shadow-sm relative group overflow-hidden ${
+                            className={`px-4 py-2.5 rounded-[20px] shadow-sm relative group/msg overflow-visible ${
                               isMe ? 'bg-gradient-to-br from-[#007aff] to-[#005bb5] text-white rounded-br-sm' 
                                    : 'bg-zinc-800 text-zinc-100 rounded-bl-sm border border-white/5'
                             }`}
                           >
+                             {/* Reply button on hover */}
+                             <button
+                               onClick={() => setReplyingTo(msg)}
+                               title="Odpowiedz"
+                               className={`absolute top-1/2 -translate-y-1/2 p-1.5 bg-black/40 hover:bg-black/80 rounded-full text-white/70 hover:text-white backdrop-blur-md opacity-0 group-hover/msg:opacity-100 transition-all z-10
+                                 ${isMe ? '-left-10' : '-right-10'}
+                               `}
+                             >
+                                <Reply className="w-4 h-4" />
+                             </button>
+
+                             {msg.replyTo && (
+                               <div 
+                                 className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-white/30 text-[13px] opacity-70 cursor-pointer hover:opacity-100 transition-opacity"
+                                 onClick={() => {
+                                   // In a real app we'd scroll to the message
+                                 }}
+                               >
+                                 <Reply className="w-3 h-3 shrink-0" />
+                                 <div className="flex-1 truncate">
+                                   <span className="font-medium mr-1">
+                                     {msg.replyTo.senderId === user.uid ? 'Ty' : (friendsInfo[msg.replyTo.senderId]?.username || 'Ktoś')}
+                                   </span>
+                                   {msg.replyTo.imageUrl ? 'Wysłał(a) zdjęcie' : msg.replyTo.content}
+                                 </div>
+                               </div>
+                             )}
                              {msg.imageUrl && (
                                <img src={msg.imageUrl} alt="" className="max-w-[240px] max-h-[320px] rounded-xl mb-2" />
                              )}
@@ -639,16 +677,33 @@ export function Messages() {
             </div>
 
             {/* Input */}
-            <form onSubmit={handleSend} className="p-4 bg-black/60 backdrop-blur-md border-t border-white/10 flex flex-col gap-3 shrink-0">
-              {imageUrl && (
-                <div className="relative self-start pl-2">
-                  <img src={imageUrl} alt="preview" className="h-20 rounded-xl object-contain border border-white/10 shadow-lg" />
-                  <button type="button" onClick={() => setImageUrl(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg">
-                    <X className="w-3 h-3" />
+            <div className="p-4 bg-black/60 backdrop-blur-md border-t border-white/10 shrink-0">
+              {replyingTo && (
+                <div className="max-w-4xl mx-auto w-full mb-2 bg-white/5 rounded-xl p-3 pb-2 flex items-start gap-3 relative border border-white/10">
+                  <Reply className="w-4 h-4 mt-0.5 text-gray-400" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-medium text-[#007aff] mb-0.5">
+                      Odpowiedź do: {replyingTo.senderId === user.uid ? 'Ty' : (friendsInfo[replyingTo.senderId]?.username || 'Użytkownika')}
+                    </p>
+                    <p className="text-[13px] text-gray-300 truncate">
+                      {replyingTo.imageUrl ? 'Zdjęcie' : replyingTo.content}
+                    </p>
+                  </div>
+                  <button onClick={() => setReplyingTo(null)} className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white">
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
-              <div className="flex items-end gap-3 max-w-4xl mx-auto w-full">
+              <form onSubmit={handleSend} className="flex flex-col gap-3">
+                {imageUrl && (
+                  <div className="relative self-start pl-2">
+                    <img src={imageUrl} alt="preview" className="h-20 rounded-xl object-contain border border-white/10 shadow-lg" />
+                    <button type="button" onClick={() => setImageUrl(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-end gap-3 max-w-4xl mx-auto w-full">
                 <div className="pb-1">
                   <ImageUploadButton onImageSelected={setImageUrl} />
                 </div>
@@ -670,6 +725,7 @@ export function Messages() {
                 </div>
               </div>
             </form>
+            </div>
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-zinc-950/50">

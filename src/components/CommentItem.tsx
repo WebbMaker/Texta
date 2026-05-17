@@ -5,7 +5,7 @@ import { Comment } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router';
-import { Heart, Trash2 } from 'lucide-react';
+import { Heart, Trash2, Reply } from 'lucide-react';
 
 import { UserAvatar } from './UserAvatar';
 import { MarkdownContent } from './MarkdownContent';
@@ -13,9 +13,10 @@ import { MarkdownContent } from './MarkdownContent';
 interface CommentItemProps {
   key?: string | number;
   comment: Comment;
+  onReply?: (comment: Comment) => void;
 }
 
-export function CommentItem({ comment }: CommentItemProps) {
+export function CommentItem({ comment, onReply }: CommentItemProps) {
   const { user, profile } = useAuth();
   const [isLiked, setIsLiked] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
@@ -70,10 +71,19 @@ export function CommentItem({ comment }: CommentItemProps) {
   };
 
   return (
-    <div className="bg-bg-dark border border-gray-800 rounded-xl p-4 text-sm flex gap-4 relative group">
+    <div className="bg-bg-dark border border-gray-800 rounded-xl p-4 text-sm flex gap-4 relative group/msg">
       <UserAvatar userId={comment.authorId} username={comment.authorUsername} className="w-8 h-8 flex-shrink-0" fallbackClassName="bg-indigo-500 font-bold font-mono text-white text-xs" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-2">
+      <div className="flex-1 min-w-0 relative">
+        {onReply && (
+          <button
+             onClick={() => onReply(comment)}
+             title="Odpowiedz"
+             className="absolute top-0 right-0 p-1.5 bg-black/40 hover:bg-black/80 rounded-full text-white/70 hover:text-white backdrop-blur-md opacity-0 group-hover/msg:opacity-100 transition-all z-10"
+           >
+              <Reply className="w-3 h-3" />
+          </button>
+        )}
+        <div className="flex items-center gap-2 mb-2 pr-8">
           <Link to={`/u/${comment.authorUsername}`} className="font-bold text-gray-200 hover:text-neon-blue transition-colors">
             {comment.authorUsername}
           </Link>
@@ -83,6 +93,17 @@ export function CommentItem({ comment }: CommentItemProps) {
             {formatDistanceToNow(comment.createdAt, { addSuffix: true })}
           </span>
         </div>
+        
+        {comment.replyTo && (
+          <div className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-gray-700 text-[12px] opacity-70">
+            <Reply className="w-3 h-3 shrink-0" />
+            <div className="flex-1 truncate">
+              <span className="font-bold mr-1">{comment.replyTo.authorUsername === profile?.username ? 'Ty' : comment.replyTo.authorUsername}</span>
+              {comment.replyTo.content}
+            </div>
+          </div>
+        )}
+
         {comment.imageUrl && (
           <img src={comment.imageUrl} alt="attached" className="max-h-40 rounded-lg object-contain border border-gray-700 mb-2 max-w-full" />
         )}

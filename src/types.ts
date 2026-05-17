@@ -60,6 +60,11 @@ export interface Comment {
   imageUrl?: string;
   createdAt: number;
   upvoteCount: number;
+  replyTo?: {
+     commentId: string;
+     content: string;
+     authorUsername: string;
+  };
 }
 
 export interface Vote {
