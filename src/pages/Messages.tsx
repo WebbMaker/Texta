@@ -594,7 +594,7 @@ export function Messages() {
                             }`}
                           >
                              {msg.imageUrl && (
-                               <img src={msg.imageUrl} alt="" className="max-w-full rounded-xl mb-2 object-cover" />
+                               <img src={msg.imageUrl} alt="" className="w-44 h-44 rounded-xl mb-2 object-cover block" />
                              )}
                              <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
                           </div>
